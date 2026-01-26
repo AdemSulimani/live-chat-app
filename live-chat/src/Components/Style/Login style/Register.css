@@ -1,0 +1,162 @@
+.register-section {
+    min-height: 100vh;
+    background-color: var(--softbackground);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+}
+
+.register-container {
+    width: 100%;
+    max-width: 450px;
+}
+
+.register-title {
+    color: var(--black);
+    font-size: 28px;
+    font-weight: 600;
+    margin-bottom: 30px;
+    text-align: center;
+}
+
+.register-form {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.input-group {
+    position: relative;
+}
+
+.register-input {
+    width: 100%;
+    padding: 12px 0;
+    border: none;
+    border-bottom: 2px solid #e0e0e0;
+    background-color: transparent;
+    font-size: 16px;
+    color: var(--black);
+    outline: none;
+    transition: border-color 0.3s ease;
+}
+
+.register-input:focus {
+    border-bottom-color: var(--whatsappgreen);
+}
+
+.register-input option {
+    font-size: 14px;
+    padding: 8px;
+}
+
+.register-input::placeholder {
+    color: #999;
+}
+
+.register-select {
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='6' height='6' viewBox='0 0 12 12'%3E%3Cpath fill='%23999' d='M6 7L3 4h6z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0 top 50%;
+    padding-right: 16px;
+    font-size: 15px;
+}
+
+.register-select:focus {
+    border-bottom-color: var(--whatsappgreen);
+}
+
+.register-select option {
+    font-size: 14px;
+    padding: 6px 4px;
+    background-color: var(--white);
+}
+
+.show-password-btn {
+    position: absolute;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: opacity 0.3s ease;
+}
+
+.show-password-btn:hover {
+    opacity: 0.7;
+}
+
+.show-password-btn svg {
+    width: 16px;
+    height: 16px;
+    fill: none;
+    stroke: #666;
+}
+
+.terms-group {
+    margin-top: 5px;
+}
+
+.terms-label {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    gap: 8px;
+}
+
+.terms-checkbox {
+    width: 14px;
+    height: 14px;
+    cursor: pointer;
+    accent-color: var(--whatsappgreen);
+    margin: 0;
+}
+
+.terms-text {
+    font-size: 14px;
+    color: #666;
+    user-select: none;
+}
+
+.register-button {
+    width: 100%;
+    padding: 14px;
+    background-color: var(--whatsappgreen);
+    color: var(--white);
+    border: none;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.3s ease;
+    margin-top: 10px;
+}
+
+.register-button:hover {
+    opacity: 0.85;
+}
+
+.register-footer {
+    text-align: center;
+    margin-top: 25px;
+    color: #666;
+    font-size: 14px;
+}
+
+.register-link {
+    color: #666;
+    text-decoration: underline;
+    transition: color 0.3s ease;
+}
+
+.register-link:hover {
+    color: #333;
+}
+
