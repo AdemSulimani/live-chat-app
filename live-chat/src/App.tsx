@@ -1,23 +1,21 @@
-import { useState } from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import './App.css'
 import { Login } from './Components/Code/Login/Login'
 import { Register } from './Components/Code/Login/Register'
 import { Profile } from './Components/Code/Profile/Profile'
+import { Dashboard } from './Components/Code/Dashboard/Dashboard'
 
 function App() {
-  const [showRegister, setShowRegister] = useState(false);
-  const [showProfile, setShowProfile] = useState(true); // Set to true to show Profile
-
   return (
-    <>
-      {showProfile ? (
-        <Profile />
-      ) : showRegister ? (
-        <Register onSwitchToLogin={() => setShowRegister(false)} />
-      ) : (
-        <Login onSwitchToRegister={() => setShowRegister(true)} />
-      )}
-    </>
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<Navigate to="/login" replace />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+        <Route path="/profile" element={<Profile />} />
+        <Route path="/dashboard" element={<Dashboard />} />
+      </Routes>
+    </BrowserRouter>
   )
 }
 
