@@ -1,11 +1,8 @@
 import '../../Style/Login style/Login.css';
 import { useLogin } from '../../../hooks/Login/useLogin';
+import { Link } from 'react-router-dom';
 
-interface LoginProps {
-    onSwitchToRegister: () => void;
-}
-
-export function Login({ onSwitchToRegister }: LoginProps) {
+export function Login() {
     const {
         email,
         setEmail,
@@ -76,7 +73,7 @@ export function Login({ onSwitchToRegister }: LoginProps) {
                     </button>
                 </form>
                 <p className="login-footer">
-                    Don't have an account? <a href="#" className="login-link" onClick={(e) => { e.preventDefault(); onSwitchToRegister(); }}>Register now!</a>
+                    Don't have an account? <Link to="/register" className="login-link">Register now!</Link>
                 </p>
             </div>
         </section>

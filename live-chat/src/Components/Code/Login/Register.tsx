@@ -1,11 +1,8 @@
 import '../../Style/Login style/Register.css';
 import { useRegister } from '../../../hooks/Register/useRegister';
+import { Link } from 'react-router-dom';
 
-interface RegisterProps {
-    onSwitchToLogin: () => void;
-}
-
-export function Register({ onSwitchToLogin }: RegisterProps) {
+export function Register() {
     const {
         name,
         setName,
@@ -138,7 +135,7 @@ export function Register({ onSwitchToLogin }: RegisterProps) {
                     </button>
                 </form>
                 <p className="register-footer">
-                    Already have an account? <a href="#" className="register-link" onClick={(e) => { e.preventDefault(); onSwitchToLogin(); }}>Login</a>
+                    Already have an account? <Link to="/login" className="register-link">Login</Link>
                 </p>
             </div>
         </section>
