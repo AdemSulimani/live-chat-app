@@ -1,21 +1,22 @@
-import { useState } from 'react';
 import '../../Style/Login style/Login.css';
+import { useLogin } from '../../../hooks/Login/useLogin';
 
 interface LoginProps {
     onSwitchToRegister: () => void;
 }
 
 export function Login({ onSwitchToRegister }: LoginProps) {
-    const [email, setEmail] = useState('');
-    const [password, setPassword] = useState('');
-    const [showPassword, setShowPassword] = useState(false);
-    const [rememberMe, setRememberMe] = useState(false);
-
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        // Handle login logic here
-        console.log('Login:', { email, password, rememberMe });
-    };
+    const {
+        email,
+        setEmail,
+        password,
+        setPassword,
+        showPassword,
+        rememberMe,
+        setRememberMe,
+        handleSubmit,
+        toggleShowPassword
+    } = useLogin();
 
     return (
         <section className="login-section">
@@ -44,7 +45,7 @@ export function Login({ onSwitchToRegister }: LoginProps) {
                         <button
                             type="button"
                             className="show-password-btn"
-                            onClick={() => setShowPassword(!showPassword)}
+                            onClick={toggleShowPassword}
                         >
                             {showPassword ? (
                                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">

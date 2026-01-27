@@ -1,33 +1,31 @@
-import { useState } from 'react';
 import '../../Style/Login style/Register.css';
-
-const countries = [
-    'Albania', 'Kosovo', 'United States', 'United Kingdom', 'Germany', 'France',
-    'Italy', 'Spain', 'Netherlands', 'Belgium', 'Switzerland', 'Austria',
-    'Sweden', 'Norway', 'Denmark', 'Finland', 'Poland', 'Greece', 'Portugal',
-    'Canada', 'Australia', 'New Zealand', 'Japan', 'South Korea', 'China',
-    'India', 'Brazil', 'Argentina', 'Mexico', 'Turkey', 'Russia', 'Other'
-];
+import { useRegister } from '../../../hooks/Register/useRegister';
 
 interface RegisterProps {
     onSwitchToLogin: () => void;
 }
 
 export function Register({ onSwitchToLogin }: RegisterProps) {
-    const [name, setName] = useState('');
-    const [email, setEmail] = useState('');
-    const [country, setCountry] = useState('');
-    const [password, setPassword] = useState('');
-    const [confirmPassword, setConfirmPassword] = useState('');
-    const [showPassword, setShowPassword] = useState(false);
-    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-    const [acceptTerms, setAcceptTerms] = useState(false);
-
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        // Handle register logic here
-        console.log('Register:', { name, email, country, password, confirmPassword, acceptTerms });
-    };
+    const {
+        name,
+        setName,
+        email,
+        setEmail,
+        country,
+        setCountry,
+        password,
+        setPassword,
+        confirmPassword,
+        setConfirmPassword,
+        showPassword,
+        showConfirmPassword,
+        acceptTerms,
+        setAcceptTerms,
+        handleSubmit,
+        toggleShowPassword,
+        toggleShowConfirmPassword,
+        countries
+    } = useRegister();
 
     return (
         <section className="register-section">
@@ -81,7 +79,7 @@ export function Register({ onSwitchToLogin }: RegisterProps) {
                         <button
                             type="button"
                             className="show-password-btn"
-                            onClick={() => setShowPassword(!showPassword)}
+                            onClick={toggleShowPassword}
                         >
                             {showPassword ? (
                                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -108,7 +106,7 @@ export function Register({ onSwitchToLogin }: RegisterProps) {
                         <button
                             type="button"
                             className="show-password-btn"
-                            onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                            onClick={toggleShowConfirmPassword}
                         >
                             {showConfirmPassword ? (
                                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
