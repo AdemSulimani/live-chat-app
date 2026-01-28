@@ -1,6 +1,7 @@
 import '../../Style/Login style/Login.css';
 import { useLogin } from '../../../hooks/Login/useLogin';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { useEffect } from 'react';
 
 export function Login() {
     const {
@@ -11,14 +12,28 @@ export function Login() {
         showPassword,
         rememberMe,
         setRememberMe,
+        loading,
+        error,
+        success,
         handleSubmit,
         toggleShowPassword
     } = useLogin();
+
+    const navigate = useNavigate();
+
+    useEffect(() => {
+        if (success) {
+            navigate('/profile');
+        }
+    }, [success, navigate]);
 
     return (
         <section className="login-section">
             <div className="login-container">
                 <h2 className="login-title">Login</h2>
+
+                {error && <div className="auth-message auth-error">{error}</div>}
+
                 <form onSubmit={handleSubmit} className="login-form">
                     <div className="input-group">
                         <input
@@ -68,8 +83,8 @@ export function Login() {
                             <span className="remember-me-text">Remember me</span>
                         </label>
                     </div>
-                    <button type="submit" className="login-button">
-                        Login
+                    <button type="submit" className="login-button" disabled={loading}>
+                        {loading ? 'Logging in...' : 'Login'}
                     </button>
                 </form>
                 <p className="login-footer">

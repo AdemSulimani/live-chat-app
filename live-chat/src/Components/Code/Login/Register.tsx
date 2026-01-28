@@ -1,6 +1,7 @@
 import '../../Style/Login style/Register.css';
 import { useRegister } from '../../../hooks/Register/useRegister';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { useEffect } from 'react';
 
 export function Register() {
     const {
@@ -18,16 +19,36 @@ export function Register() {
         showConfirmPassword,
         acceptTerms,
         setAcceptTerms,
+        loading,
+        error,
+        success,
         handleSubmit,
         toggleShowPassword,
         toggleShowConfirmPassword,
         countries
     } = useRegister();
 
+    const navigate = useNavigate();
+
+    useEffect(() => {
+        if (success) {
+            // Mund të shtojmë një vonesë të vogël nëse dëshiron para redirect-it
+            const timeout = setTimeout(() => {
+                navigate('/login');
+            }, 1500);
+
+            return () => clearTimeout(timeout);
+        }
+    }, [success, navigate]);
+
     return (
         <section className="register-section">
             <div className="register-container">
                 <h2 className="register-title">Register</h2>
+
+                {error && <div className="auth-message auth-error">{error}</div>}
+                {success && <div className="auth-message auth-success">User created successfully. Redirecting to login...</div>}
+
                 <form onSubmit={handleSubmit} className="register-form">
                     <div className="input-group">
                         <input
@@ -130,8 +151,8 @@ export function Register() {
                             <span className="terms-text">I accept terms & policies</span>
                         </label>
                     </div>
-                    <button type="submit" className="register-button">
-                        Register
+                    <button type="submit" className="register-button" disabled={loading}>
+                        {loading ? 'Registering...' : 'Register'}
                     </button>
                 </form>
                 <p className="register-footer">

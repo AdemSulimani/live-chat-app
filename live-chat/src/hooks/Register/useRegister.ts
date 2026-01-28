@@ -17,11 +17,62 @@ export function useRegister() {
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [acceptTerms, setAcceptTerms] = useState(false);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [success, setSuccess] = useState(false);
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        // Handle register logic here
-        console.log('Register:', { name, email, country, password, confirmPassword, acceptTerms });
+        setError(null);
+        setSuccess(false);
+
+        // Simple client-side checks before calling backend
+        if (password !== confirmPassword) {
+            setError('Passwords do not match');
+            return;
+        }
+
+        setLoading(true);
+        try {
+            const response = await fetch('http://localhost:5000/api/auth/register', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    name,
+                    email,
+                    country,
+                    password,
+                    confirmPassword,
+                    acceptTerms,
+                }),
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                setError(data.message || 'Registration failed');
+                return;
+            }
+
+            // Registration successful
+            setSuccess(true);
+            // Optional: clear form fields after success
+            // setName('');
+            // setEmail('');
+            // setCountry('');
+            // setPassword('');
+            // setConfirmPassword('');
+            // setAcceptTerms(false);
+
+            console.log('Register success:', data);
+        } catch (err) {
+            console.error(err);
+            setError('Something went wrong. Please try again.');
+        } finally {
+            setLoading(false);
+        }
     };
 
     const toggleShowPassword = () => {
@@ -47,6 +98,9 @@ export function useRegister() {
         showConfirmPassword,
         acceptTerms,
         setAcceptTerms,
+        loading,
+        error,
+        success,
         handleSubmit,
         toggleShowPassword,
         toggleShowConfirmPassword,
