@@ -34,6 +34,16 @@ interface Notification {
     isRead: boolean;
 }
 
+interface User {
+    id: string;
+    name: string;
+    username: string;
+    avatar: string;
+    status: string;
+    bio?: string;
+    statusMessage?: string;
+}
+
 export function useDashboard() {
     const [friends, setFriends] = useState<Friend[]>([
         { id: '1', name: 'John Doe', username: 'johndoe', avatar: '', isOnline: true },
@@ -64,12 +74,14 @@ export function useDashboard() {
     const chatContainerRef = useRef<HTMLDivElement>(null);
 
     // Mock user profile
-    const currentUser = {
+    const currentUser: User = {
         id: 'current',
         name: 'Your Name',
         username: 'yourusername',
         avatar: '',
-        status: 'Online'
+        status: 'Online',
+        bio: 'This is my bio. I love chatting with friends!',
+        statusMessage: 'Available for chat'
     };
 
     // Scroll to bottom when new messages arrive
