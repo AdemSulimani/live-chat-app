@@ -261,6 +261,29 @@
     font-style: italic;
 }
 
+/* Delete Account Button */
+.delete-account-btn {
+    background: none;
+    border: none;
+    padding: 0;
+    margin-top: 24px;
+    cursor: pointer;
+    color: #dc3545;
+    font-size: 14px;
+    font-weight: 500;
+    text-align: left;
+    transition: all 0.2s ease;
+}
+
+.delete-account-btn:hover {
+    color: #c82333;
+    opacity: 0.8;
+}
+
+.delete-account-btn:active {
+    opacity: 0.6;
+}
+
 /* Edit Button */
 .edit-btn {
     display: flex;
