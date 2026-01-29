@@ -92,7 +92,7 @@ const sendFriendRequest = async (req, res) => {
     }
 
     // Check if there's already a pending request (in either direction)
-    const existingRequest = await FriendRequest.findOne({
+    const existingPendingRequest = await FriendRequest.findOne({
       $or: [
         { fromUser: req.user._id, toUser: userId },
         { fromUser: userId, toUser: req.user._id },
@@ -100,9 +100,18 @@ const sendFriendRequest = async (req, res) => {
       status: 'pending',
     });
 
-    if (existingRequest) {
+    if (existingPendingRequest) {
       return res.status(400).json({ message: 'Friend request already exists' });
     }
+
+    // Delete any old friend requests (accepted or rejected) between them to allow new request
+    await FriendRequest.deleteMany({
+      $or: [
+        { fromUser: req.user._id, toUser: userId },
+        { fromUser: userId, toUser: req.user._id },
+      ],
+      status: { $in: ['accepted', 'rejected'] },
+    });
 
     // Create friend request
     const friendRequest = await FriendRequest.create({
