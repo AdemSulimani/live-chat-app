@@ -1,4 +1,5 @@
 const User = require('../models/User');
+const FriendRequest = require('../models/FriendRequest');
 
 // @desc    Get user's friends list
 // @route   GET /api/friends
@@ -76,6 +77,14 @@ const removeFriend = async (req, res) => {
 
     await User.findByIdAndUpdate(friendId, {
       $pull: { friends: req.user._id },
+    });
+
+    // Delete all friend requests between them (in both directions and all statuses)
+    await FriendRequest.deleteMany({
+      $or: [
+        { fromUser: req.user._id, toUser: friendId },
+        { fromUser: friendId, toUser: req.user._id },
+      ],
     });
 
     return res.status(200).json({
