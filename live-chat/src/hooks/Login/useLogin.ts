@@ -1,6 +1,22 @@
 import { useState } from 'react';
+import { useUser } from '../../contexts/UserContext';
+
+interface UserData {
+    id: string;
+    name: string;
+    email: string;
+    country: string;
+    username?: string;
+    displayName?: string;
+    bio?: string;
+    statusMessage?: string;
+    profilePhoto?: string;
+    profileCompleted: boolean;
+    createdAt: string;
+}
 
 export function useLogin() {
+    const { login } = useUser();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
@@ -8,11 +24,13 @@ export function useLogin() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState(false);
+    const [redirectPath, setRedirectPath] = useState<string | null>(null);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError(null);
         setSuccess(false);
+        setRedirectPath(null);
 
         setLoading(true);
         try {
@@ -35,16 +53,23 @@ export function useLogin() {
             }
 
             console.log('Login success:', data);
-            setSuccess(true);
-
-            // Nëse kthehet token, mund ta ruajmë (p.sh. localStorage) për përdorim të mëvonshëm
-            if (data.token) {
-                if (rememberMe) {
-                    localStorage.setItem('token', data.token);
-                } else {
-                    sessionStorage.setItem('token', data.token);
-                }
+            
+            // Ruaj token dhe user data në context
+            if (data.token && data.user) {
+                login(data.token, data.user, rememberMe);
             }
+
+            // Kontrollo nëse profili është i plotësuar
+            const profileCompleted = data.user?.profileCompleted || false;
+            
+            // Vendos redirect path bazuar në profileCompleted
+            if (profileCompleted) {
+                setRedirectPath('/dashboard');
+            } else {
+                setRedirectPath('/profile');
+            }
+
+            setSuccess(true);
         } catch (err) {
             console.error(err);
             setError('Something went wrong. Please try again.');
@@ -68,6 +93,7 @@ export function useLogin() {
         loading,
         error,
         success,
+        redirectPath,
         handleSubmit,
         toggleShowPassword
     };

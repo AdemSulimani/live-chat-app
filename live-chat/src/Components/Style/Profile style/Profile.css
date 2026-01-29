@@ -130,6 +130,11 @@
     border-bottom-color: var(--whatsappgreen);
 }
 
+.profile-input.error,
+.profile-textarea.error {
+    border-bottom-color: #ff4444;
+}
+
 .profile-input::placeholder,
 .profile-textarea::placeholder {
     color: #999;
@@ -156,6 +161,34 @@
 
 .profile-button:hover {
     opacity: 0.85;
+}
+
+.profile-button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* Field Errors */
+.field-error {
+    color: #ff4444;
+    font-size: 12px;
+    margin-top: -5px;
+    display: block;
+}
+
+.checking-username {
+    color: #666;
+    font-size: 12px;
+    margin-top: -5px;
+    display: block;
+    font-style: italic;
+}
+
+.char-count {
+    font-size: 11px;
+    color: #999;
+    text-align: right;
+    margin-top: -5px;
 }
 
 /* Responsive Design */

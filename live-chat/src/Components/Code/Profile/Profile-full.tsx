@@ -7,6 +7,10 @@ export function ProfileFull() {
     const {
         profileData,
         isEditing,
+        loading,
+        error,
+        saving,
+        saveError,
         fileInputRef,
         handleInputChange,
         handlePhotoUpload,
@@ -45,6 +49,22 @@ export function ProfileFull() {
 
             {/* Main Content */}
             <main className="profile-full-main">
+                {loading && (
+                    <div className="profile-loading" style={{ padding: '2rem', textAlign: 'center' }}>
+                        Loading profile...
+                    </div>
+                )}
+                {error && !loading && (
+                    <div className="auth-message auth-error" style={{ margin: '2rem', padding: '1rem' }}>
+                        {error}
+                    </div>
+                )}
+                {saveError && (
+                    <div className="auth-message auth-error" style={{ margin: '2rem', padding: '1rem' }}>
+                        {saveError}
+                    </div>
+                )}
+                {!loading && !error && (
                 <div className="profile-full-content">
                     {/* Profile Photo Section - Left Side */}
                     <div className="profile-photo-section">
@@ -57,11 +77,26 @@ export function ProfileFull() {
                                 />
                             ) : (
                                 <div className="profile-photo-placeholder">
-                                    {profileData.name.charAt(0).toUpperCase()}
+                                    {(profileData.name || profileData.displayName || 'U').charAt(0).toUpperCase()}
                                 </div>
                             )}
                             <span className="profile-online-indicator"></span>
                             <div className="photo-edit-overlay">
+                                {saving === 'photo' && (
+                                    <div style={{ 
+                                        position: 'absolute', 
+                                        top: '50%', 
+                                        left: '50%', 
+                                        transform: 'translate(-50%, -50%)',
+                                        background: 'rgba(0,0,0,0.7)',
+                                        color: 'white',
+                                        padding: '0.5rem 1rem',
+                                        borderRadius: '4px',
+                                        fontSize: '0.875rem'
+                                    }}>
+                                        Uploading...
+                                    </div>
+                                )}
                                 <input
                                     type="file"
                                     ref={fileInputRef}
@@ -69,8 +104,14 @@ export function ProfileFull() {
                                     accept="image/*"
                                     className="file-input"
                                     id="photo-upload"
+                                    disabled={saving === 'photo'}
                                 />
-                                <label htmlFor="photo-upload" className="photo-edit-btn" title="Change Photo">
+                                <label 
+                                    htmlFor="photo-upload" 
+                                    className="photo-edit-btn" 
+                                    title="Change Photo"
+                                    style={{ opacity: saving === 'photo' ? 0.5 : 1, pointerEvents: saving === 'photo' ? 'none' : 'auto' }}
+                                >
                                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                         <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
                                         <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
@@ -102,12 +143,14 @@ export function ProfileFull() {
                                         <button 
                                             className="save-btn"
                                             onClick={() => handleSave('name')}
+                                            disabled={saving === 'name'}
                                         >
-                                            Save
+                                            {saving === 'name' ? 'Saving...' : 'Save'}
                                         </button>
                                         <button 
                                             className="cancel-btn"
                                             onClick={() => handleCancel('name')}
+                                            disabled={saving === 'name'}
                                         >
                                             Cancel
                                         </button>
@@ -117,14 +160,16 @@ export function ProfileFull() {
                             {isEditing.name ? (
                                 <input
                                     type="text"
-                                    name="name"
-                                    value={profileData.name}
+                                    name="displayName"
+                                    value={profileData.displayName || profileData.name}
                                     onChange={handleInputChange}
                                     className="profile-edit-input"
                                     autoFocus
                                 />
                             ) : (
-                                <p className="profile-info-value">{profileData.name}</p>
+                                <p className="profile-info-value">
+                                    {profileData.displayName || profileData.name || 'No display name set'}
+                                </p>
                             )}
                         </div>
 
@@ -148,12 +193,14 @@ export function ProfileFull() {
                                         <button 
                                             className="save-btn"
                                             onClick={() => handleSave('username')}
+                                            disabled={saving === 'username'}
                                         >
-                                            Save
+                                            {saving === 'username' ? 'Saving...' : 'Save'}
                                         </button>
                                         <button 
                                             className="cancel-btn"
                                             onClick={() => handleCancel('username')}
+                                            disabled={saving === 'username'}
                                         >
                                             Cancel
                                         </button>
@@ -170,7 +217,9 @@ export function ProfileFull() {
                                     autoFocus
                                 />
                             ) : (
-                                <p className="profile-info-value">@{profileData.username}</p>
+                                <p className="profile-info-value">
+                                    {profileData.username ? `@${profileData.username}` : 'No username set'}
+                                </p>
                             )}
                         </div>
 
@@ -194,12 +243,14 @@ export function ProfileFull() {
                                         <button 
                                             className="save-btn"
                                             onClick={() => handleSave('bio')}
+                                            disabled={saving === 'bio'}
                                         >
-                                            Save
+                                            {saving === 'bio' ? 'Saving...' : 'Save'}
                                         </button>
                                         <button 
                                             className="cancel-btn"
                                             onClick={() => handleCancel('bio')}
+                                            disabled={saving === 'bio'}
                                         >
                                             Cancel
                                         </button>
@@ -242,12 +293,14 @@ export function ProfileFull() {
                                         <button 
                                             className="save-btn"
                                             onClick={() => handleSave('statusMessage')}
+                                            disabled={saving === 'statusMessage'}
                                         >
-                                            Save
+                                            {saving === 'statusMessage' ? 'Saving...' : 'Save'}
                                         </button>
                                         <button 
                                             className="cancel-btn"
                                             onClick={() => handleCancel('statusMessage')}
+                                            disabled={saving === 'statusMessage'}
                                         >
                                             Cancel
                                         </button>
@@ -286,6 +339,7 @@ export function ProfileFull() {
                         </button>
                     </div>
                 </div>
+                )}
             </main>
         </div>
     );

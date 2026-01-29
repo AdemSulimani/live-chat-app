@@ -35,6 +35,36 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    // Profile fields
+    username: {
+      type: String,
+      unique: true,
+      sparse: true, // Lejon null values por garanton uniqueness kur ekziston
+      trim: true,
+      lowercase: true,
+    },
+    displayName: {
+      type: String,
+      trim: true,
+    },
+    bio: {
+      type: String,
+      trim: true,
+      maxlength: 500,
+    },
+    statusMessage: {
+      type: String,
+      trim: true,
+      maxlength: 100,
+    },
+    profilePhoto: {
+      type: String, // Do të ruajmë URL ose path të fotos
+      default: null,
+    },
+    profileCompleted: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: true, // createdAt, updatedAt

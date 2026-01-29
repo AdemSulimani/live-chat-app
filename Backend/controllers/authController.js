@@ -49,18 +49,35 @@ const registerUser = async (req, res) => {
       acceptTerms,
     });
 
+    // Create JWT token për auto-login pas regjistrimit
+    let token = null;
+    if (process.env.JWT_SECRET) {
+      token = jwt.sign(
+        { userId: user._id },
+        process.env.JWT_SECRET,
+        { expiresIn: '7d' }
+      );
+    }
+
     // Remove password from response
     const userResponse = {
       id: user._id,
       name: user.name,
       email: user.email,
       country: user.country,
+      username: user.username,
+      displayName: user.displayName,
+      bio: user.bio,
+      statusMessage: user.statusMessage,
+      profilePhoto: user.profilePhoto,
+      profileCompleted: user.profileCompleted || false,
       createdAt: user.createdAt,
     };
 
     return res.status(201).json({
       message: 'User registered successfully',
       user: userResponse,
+      token,
     });
   } catch (error) {
     console.error('Register error:', error);
@@ -112,6 +129,12 @@ const loginUser = async (req, res) => {
       name: user.name,
       email: user.email,
       country: user.country,
+      username: user.username,
+      displayName: user.displayName,
+      bio: user.bio,
+      statusMessage: user.statusMessage,
+      profilePhoto: user.profilePhoto,
+      profileCompleted: user.profileCompleted || false,
       createdAt: user.createdAt,
     };
 

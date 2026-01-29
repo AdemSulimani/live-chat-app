@@ -22,6 +22,7 @@ export function Register() {
         loading,
         error,
         success,
+        redirectPath,
         handleSubmit,
         toggleShowPassword,
         toggleShowConfirmPassword,
@@ -31,15 +32,10 @@ export function Register() {
     const navigate = useNavigate();
 
     useEffect(() => {
-        if (success) {
-            // Mund të shtojmë një vonesë të vogël nëse dëshiron para redirect-it
-            const timeout = setTimeout(() => {
-                navigate('/login');
-            }, 1500);
-
-            return () => clearTimeout(timeout);
+        if (success && redirectPath) {
+            navigate(redirectPath);
         }
-    }, [success, navigate]);
+    }, [success, redirectPath, navigate]);
 
     return (
         <section className="register-section">
@@ -47,7 +43,7 @@ export function Register() {
                 <h2 className="register-title">Register</h2>
 
                 {error && <div className="auth-message auth-error">{error}</div>}
-                {success && <div className="auth-message auth-success">User created successfully. Redirecting to login...</div>}
+                {success && <div className="auth-message auth-success">Account created successfully! Redirecting...</div>}
 
                 <form onSubmit={handleSubmit} className="register-form">
                     <div className="input-group">

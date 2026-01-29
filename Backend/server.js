@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
+const path = require('path');
 const connectDB = require('./config/db');
 
 // Load environment variables
@@ -15,9 +16,14 @@ connectDB();
 app.use(cors());
 app.use(express.json());
 
+// Serve static files (profile photos)
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
 // Routes
 const authRoutes = require('./routes/authRoutes');
+const profileRoutes = require('./routes/profileRoutes');
 app.use('/api/auth', authRoutes);
+app.use('/api/profile', profileRoutes);
 
 // Basic route for testing
 app.get('/', (req, res) => {

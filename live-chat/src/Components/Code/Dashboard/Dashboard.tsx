@@ -76,14 +76,16 @@ export function Dashboard() {
                                 <img src={currentUser.avatar} alt={currentUser.name} />
                             ) : (
                                 <div className="avatar-placeholder">
-                                    {currentUser.name.charAt(0).toUpperCase()}
+                                    {(currentUser.name || 'U').charAt(0).toUpperCase()}
                                 </div>
                             )}
                             <span className="online-indicator"></span>
                         </div>
                         <div className="mini-profile-info">
-                            <h3 className="mini-profile-name">{currentUser.name}</h3>
-                            <p className="mini-profile-status">{currentUser.status}</p>
+                            <h3 className="mini-profile-name">{currentUser.name || 'User'}</h3>
+                            <p className="mini-profile-status">
+                                {currentUser.statusMessage || currentUser.status || 'Offline'}
+                            </p>
                         </div>
                         <button className="profile-toggle-btn">
                             {showMiniProfile ? '▼' : '▲'}
@@ -91,7 +93,15 @@ export function Dashboard() {
                     </div>
                     {showMiniProfile && (
                         <div className="mini-profile-details">
-                            <p><strong>Username:</strong> @{currentUser.username}</p>
+                            {currentUser.username && (
+                                <p><strong>Username:</strong> @{currentUser.username}</p>
+                            )}
+                            {currentUser.statusMessage && (
+                                <p><strong>Status:</strong> {currentUser.statusMessage}</p>
+                            )}
+                            {currentUser.bio && (
+                                <p className="mini-profile-bio"><strong>Bio:</strong> {currentUser.bio}</p>
+                            )}
                             <button 
                                 className="view-full-profile-btn"
                                 onClick={() => navigate('/profile-full')}
@@ -189,7 +199,7 @@ export function Dashboard() {
                                             <img src={request.fromUserAvatar} alt={request.fromUserName} />
                                         ) : (
                                             <div className="avatar-placeholder">
-                                                {request.fromUserName.charAt(0).toUpperCase()}
+                                                {(request.fromUserName || 'U').charAt(0).toUpperCase()}
                                             </div>
                                         )}
                                     </div>
@@ -258,7 +268,7 @@ export function Dashboard() {
                                         <img src={friend.avatar} alt={friend.name} />
                                     ) : (
                                         <div className="avatar-placeholder">
-                                            {friend.name.charAt(0).toUpperCase()}
+                                            {(friend.name || 'U').charAt(0).toUpperCase()}
                                         </div>
                                     )}
                                     {friend.isOnline && <span className="online-indicator"></span>}
@@ -306,7 +316,7 @@ export function Dashboard() {
                                         <img src={selectedFriend.avatar} alt={selectedFriend.name} />
                                     ) : (
                                         <div className="avatar-placeholder">
-                                            {selectedFriend.name.charAt(0).toUpperCase()}
+                                            {(selectedFriend.name || 'U').charAt(0).toUpperCase()}
                                         </div>
                                     )}
                                     {selectedFriend.isOnline && <span className="online-indicator"></span>}
