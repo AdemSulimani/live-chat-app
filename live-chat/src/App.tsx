@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import './App.css'
 import { UserProvider } from './contexts/UserContext'
+import { SocketProvider } from './contexts/SocketContext'
 import { ProtectedRoute } from './Components/ProtectedRoute'
 import { PublicRoute } from './Components/PublicRoute'
 import { Login } from './Components/Code/Login/Login'
@@ -13,7 +14,8 @@ import { Settings } from './Components/Code/Settings/Settings'
 function App() {
   return (
     <UserProvider>
-      <BrowserRouter>
+      <SocketProvider>
+        <BrowserRouter>
         <Routes>
           <Route path="/" element={<Navigate to="/login" replace />} />
           
@@ -70,6 +72,7 @@ function App() {
           />
         </Routes>
       </BrowserRouter>
+      </SocketProvider>
     </UserProvider>
   )
 }

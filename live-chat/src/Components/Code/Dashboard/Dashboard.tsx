@@ -27,6 +27,11 @@ export function Dashboard() {
         setAddFriendInput,
         unreadCount,
         currentUser,
+        loading,
+        errorMessage,
+        successMessage,
+        setErrorMessage,
+        setSuccessMessage,
         messagesEndRef,
         handleSendMessage,
         handleAddFriend,
@@ -63,6 +68,13 @@ export function Dashboard() {
 
     return (
         <div className="dashboard-container">
+            {loading ? (
+                <div className="dashboard-loading">
+                    <div className="loading-spinner"></div>
+                    <p>Loading...</p>
+                </div>
+            ) : (
+                <>
             {/* Sidebar */}
             <aside className={`dashboard-sidebar ${showSidebar ? 'show' : 'hide'}`}>
                 {/* Mini Profile View */}
@@ -154,7 +166,7 @@ export function Dashboard() {
                             <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
                         </svg>
                         Notifications
-                        {unreadCount > 0 && (
+                        {notifications.length > 0 && unreadCount > 0 && (
                             <span className="badge">{unreadCount}</span>
                         )}
                     </button>
@@ -168,15 +180,33 @@ export function Dashboard() {
                                 type="text"
                                 placeholder="Enter username or email"
                                 value={addFriendInput}
-                                onChange={(e) => setAddFriendInput(e.target.value)}
+                                onChange={(e) => {
+                                    setAddFriendInput(e.target.value);
+                                    setErrorMessage(null);
+                                    if (setSuccessMessage) setSuccessMessage(null);
+                                }}
                                 className="add-friend-input"
                             />
+                            {errorMessage && (
+                                <div className="error-message">
+                                    {errorMessage}
+                                </div>
+                            )}
+                            {successMessage && (
+                                <div className="success-message">
+                                    {successMessage}
+                                </div>
+                            )}
                             <div className="form-buttons">
                                 <button type="submit" className="submit-btn">Add</button>
                                 <button 
                                     type="button" 
                                     className="cancel-btn"
-                                    onClick={() => setShowAddFriend(false)}
+                                onClick={() => {
+                                    setShowAddFriend(false);
+                                    setErrorMessage(null);
+                                    if (setSuccessMessage) setSuccessMessage(null);
+                                }}
                                 >
                                     Cancel
                                 </button>
@@ -255,34 +285,40 @@ export function Dashboard() {
                 {/* Friends List */}
                 <div className="friends-list-section">
                     <h4 className="section-title">Friends ({friends.length})</h4>
-                    <p className="friends-hint">Click on a profile to start chatting</p>
-                    <div className="friends-list">
-                        {friends.map(friend => (
-                            <div
-                                key={friend.id}
-                                className={`friend-item ${selectedFriend?.id === friend.id ? 'active' : ''}`}
-                                onClick={() => handleFriendClick(friend)}
-                            >
-                                <div className="friend-avatar">
-                                    {friend.avatar ? (
-                                        <img src={friend.avatar} alt={friend.name} />
-                                    ) : (
-                                        <div className="avatar-placeholder">
-                                            {(friend.name || 'U').charAt(0).toUpperCase()}
-                                        </div>
+                    {friends.length === 0 ? (
+                        <p className="friends-hint">No friends added, add a friend to start chatting</p>
+                    ) : (
+                        <p className="friends-hint">Click on a profile to start chatting</p>
+                    )}
+                    {friends.length > 0 && (
+                        <div className="friends-list">
+                            {friends.map(friend => (
+                                <div
+                                    key={friend.id}
+                                    className={`friend-item ${selectedFriend?.id === friend.id ? 'active' : ''}`}
+                                    onClick={() => handleFriendClick(friend)}
+                                >
+                                    <div className="friend-avatar">
+                                        {friend.avatar ? (
+                                            <img src={friend.avatar} alt={friend.name} />
+                                        ) : (
+                                            <div className="avatar-placeholder">
+                                                {(friend.name || 'U').charAt(0).toUpperCase()}
+                                            </div>
+                                        )}
+                                        {friend.isOnline && <span className="online-indicator"></span>}
+                                    </div>
+                                    <div className="friend-info">
+                                        <p className="friend-name">{friend.name}</p>
+                                        <p className="friend-username">@{friend.username}</p>
+                                    </div>
+                                    {friend.isOnline && (
+                                        <span className="online-badge">Online</span>
                                     )}
-                                    {friend.isOnline && <span className="online-indicator"></span>}
                                 </div>
-                                <div className="friend-info">
-                                    <p className="friend-name">{friend.name}</p>
-                                    <p className="friend-username">@{friend.username}</p>
-                                </div>
-                                {friend.isOnline && (
-                                    <span className="online-badge">Online</span>
-                                )}
-                            </div>
-                        ))}
-                    </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
 
                 {/* Settings Section */}
@@ -427,8 +463,16 @@ export function Dashboard() {
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                                 <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
                             </svg>
-                            <h2>Select a friend to start chatting</h2>
-                            <p>Choose someone from your friends list to begin a conversation</p>
+                            {friends.length === 0 ? (
+                                <>
+                                    <h2>Add a friend to start chatting with him</h2>
+                                </>
+                            ) : (
+                                <>
+                                    <h2>Select a friend to start chatting</h2>
+                                    <p>Choose someone from your friends list to begin a conversation</p>
+                                </>
+                            )}
                         </div>
                     </div>
                 )}
@@ -459,6 +503,8 @@ export function Dashboard() {
                         </div>
                     </div>
                 </div>
+            )}
+                </>
             )}
         </div>
     );

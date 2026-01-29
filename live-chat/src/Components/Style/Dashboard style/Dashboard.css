@@ -220,6 +220,41 @@
     border-color: var(--whatsappgreen);
 }
 
+.error-message {
+    padding: 10px 12px;
+    margin-bottom: 10px;
+    background-color: #ffebee;
+    color: #c62828;
+    border: 1px solid #ef5350;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    animation: slideIn 0.3s ease;
+}
+
+.success-message {
+    padding: 10px 12px;
+    margin-bottom: 10px;
+    background-color: #e8f5e9;
+    color: #2e7d32;
+    border: 1px solid #4caf50;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    animation: slideIn 0.3s ease;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
 .form-buttons {
     display: flex;
     gap: 8px;
@@ -467,6 +502,38 @@
 .settings-btn svg {
     width: 20px;
     height: 20px;
+}
+
+/* Loading State */
+.dashboard-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    width: 100%;
+    background-color: var(--softbackground);
+    gap: 20px;
+}
+
+.loading-spinner {
+    width: 50px;
+    height: 50px;
+    border: 4px solid #e0e0e0;
+    border-top: 4px solid var(--whatsappgreen);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.dashboard-loading p {
+    color: var(--black);
+    font-size: 16px;
+    font-weight: 500;
 }
 
 .friends-hint {

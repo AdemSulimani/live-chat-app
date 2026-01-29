@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useUser } from '../../contexts/UserContext';
 
 export interface Friend {
     id: string;
@@ -11,17 +12,102 @@ export interface Friend {
 
 export function useFriends() {
     const navigate = useNavigate();
+    const { getToken, user } = useUser();
     
-    const [friends, setFriends] = useState<Friend[]>([
-        { id: '1', name: 'John Doe', username: 'johndoe', avatar: '', isOnline: true },
-        { id: '2', name: 'Jane Smith', username: 'janesmith', avatar: '', isOnline: false },
-        { id: '3', name: 'Mike Johnson', username: 'mikej', avatar: '', isOnline: true },
-        { id: '4', name: 'Sarah Williams', username: 'sarahw', avatar: '', isOnline: true }
-    ]);
+    const [friends, setFriends] = useState<Friend[]>([]);
+    const [loading, setLoading] = useState(true);
 
-    const handleRemoveFriend = (friendId: string) => {
-        if (window.confirm('Are you sure you want to remove this friend?')) {
-            setFriends(prev => prev.filter(friend => friend.id !== friendId));
+    // Load friends from API when component mounts
+    useEffect(() => {
+        const loadFriends = async () => {
+            const token = getToken();
+            if (!token || !user) {
+                setLoading(false);
+                return;
+            }
+
+            try {
+                const response = await fetch('http://localhost:5000/api/friends', {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json',
+                    },
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    setFriends(data.friends || []);
+                } else if (response.status === 401) {
+                    console.error('Authentication failed');
+                    // Will be handled by ProtectedRoute
+                } else {
+                    const errorData = await response.json().catch(() => ({ message: 'Failed to load friends' }));
+                    console.error('Failed to load friends:', errorData.message);
+                }
+            } catch (error) {
+                console.error('Error loading friends:', error);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        loadFriends();
+    }, [user, getToken]);
+
+    const handleRemoveFriend = async (friendId: string) => {
+        if (!window.confirm('Are you sure you want to remove this friend?')) {
+            return;
+        }
+
+        const token = getToken();
+        if (!token) {
+            console.error('No token available');
+            alert('You must be logged in to remove a friend');
+            return;
+        }
+
+        try {
+            const response = await fetch(`http://localhost:5000/api/friends/remove/${friendId}`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                },
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                if (response.status === 401) {
+                    alert('Your session has expired. Please login again.');
+                    return;
+                }
+                console.error('Error removing friend:', data.message);
+                alert(data.message || 'Failed to remove friend');
+                return;
+            }
+
+            // Refresh friends list
+            const friendsResponse = await fetch('http://localhost:5000/api/friends', {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                },
+            });
+
+            if (friendsResponse.ok) {
+                const friendsData = await friendsResponse.json();
+                setFriends(friendsData.friends || []);
+            }
+        } catch (error) {
+            console.error('Error removing friend:', error);
+            if (error instanceof TypeError && error.message.includes('fetch')) {
+                alert('Network error. Please check your connection and try again.');
+            } else {
+                alert('Failed to remove friend. Please try again.');
+            }
         }
     };
 
@@ -32,6 +118,7 @@ export function useFriends() {
 
     return {
         friends,
+        loading,
         handleRemoveFriend,
         handleMessageFriend
     };
