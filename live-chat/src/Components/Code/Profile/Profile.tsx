@@ -5,6 +5,10 @@ export function Profile() {
     const {
         profileData,
         fileInputRef,
+        loading,
+        error,
+        fieldErrors,
+        checkingUsername,
         handleInputChange,
         handlePhotoUpload,
         handleSubmit
@@ -14,6 +18,8 @@ export function Profile() {
         <section className="profile-section">
             <div className="profile-container">
                 <h1 className="profile-title">Create Your Profile</h1>
+                
+                {error && <div className="auth-message auth-error" style={{ marginBottom: '1rem' }}>{error}</div>}
                 
                 <form onSubmit={handleSubmit} className="profile-form">
                     {/* Photo Upload Section */}
@@ -43,6 +49,9 @@ export function Profile() {
                             {profileData.photoPreview ? 'Change Photo' : 'Upload Photo'}
                         </label>
                         <p className="optional-text">(Optional)</p>
+                        {fieldErrors.profilePhoto && (
+                            <span className="field-error">{fieldErrors.profilePhoto}</span>
+                        )}
                     </div>
 
                     {/* Username Input */}
@@ -54,9 +63,15 @@ export function Profile() {
                             value={profileData.username}
                             onChange={handleInputChange}
                             placeholder="Username"
-                            className="profile-input"
+                            className={`profile-input ${fieldErrors.username ? 'error' : ''}`}
                             required
                         />
+                        {fieldErrors.username && (
+                            <span className="field-error">{fieldErrors.username}</span>
+                        )}
+                        {checkingUsername && (
+                            <span className="checking-username">Checking availability...</span>
+                        )}
                     </div>
 
                     {/* Display Name Input */}
@@ -68,9 +83,12 @@ export function Profile() {
                             value={profileData.displayName}
                             onChange={handleInputChange}
                             placeholder="Display Name"
-                            className="profile-input"
+                            className={`profile-input ${fieldErrors.displayName ? 'error' : ''}`}
                             required
                         />
+                        {fieldErrors.displayName && (
+                            <span className="field-error">{fieldErrors.displayName}</span>
+                        )}
                     </div>
 
                     {/* Bio Input */}
@@ -81,9 +99,14 @@ export function Profile() {
                             value={profileData.bio}
                             onChange={handleInputChange}
                             placeholder="Bio"
-                            className="profile-textarea"
+                            className={`profile-textarea ${fieldErrors.bio ? 'error' : ''}`}
                             rows={3}
+                            maxLength={500}
                         />
+                        {fieldErrors.bio && (
+                            <span className="field-error">{fieldErrors.bio}</span>
+                        )}
+                        <span className="char-count">{profileData.bio.length}/500</span>
                     </div>
 
                     {/* Status Message */}
@@ -95,13 +118,18 @@ export function Profile() {
                             value={profileData.statusMessage}
                             onChange={handleInputChange}
                             placeholder="Status Message"
-                            className="profile-input"
+                            className={`profile-input ${fieldErrors.statusMessage ? 'error' : ''}`}
+                            maxLength={100}
                         />
+                        {fieldErrors.statusMessage && (
+                            <span className="field-error">{fieldErrors.statusMessage}</span>
+                        )}
+                        <span className="char-count">{profileData.statusMessage.length}/100</span>
                     </div>
 
                     {/* Submit Button */}
-                    <button type="submit" className="profile-button">
-                        Save Profile
+                    <button type="submit" className="profile-button" disabled={loading}>
+                        {loading ? 'Saving...' : 'Save Profile'}
                     </button>
                 </form>
             </div>

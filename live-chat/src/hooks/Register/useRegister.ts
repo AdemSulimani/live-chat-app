@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useUser } from '../../contexts/UserContext';
 
 const countries = [
     'Albania', 'Kosovo', 'United States', 'United Kingdom', 'Germany', 'France',
@@ -20,6 +21,8 @@ export function useRegister() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState(false);
+    const [redirectPath, setRedirectPath] = useState<string | null>(null);
+    const { login } = useUser();
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -56,17 +59,33 @@ export function useRegister() {
                 return;
             }
 
-            // Registration successful
-            setSuccess(true);
-            // Optional: clear form fields after success
-            // setName('');
-            // setEmail('');
-            // setCountry('');
-            // setPassword('');
-            // setConfirmPassword('');
-            // setAcceptTerms(false);
-
+            // Registration successful - auto login user
             console.log('Register success:', data);
+            
+            // Auto login pas regjistrimit nëse ka token
+            if (data.user && data.token) {
+                login(data.token, {
+                    id: data.user.id,
+                    name: data.user.name,
+                    email: data.user.email,
+                    country: data.user.country,
+                    username: data.user.username || '',
+                    displayName: data.user.displayName || '',
+                    bio: data.user.bio || '',
+                    statusMessage: data.user.statusMessage || '',
+                    profilePhoto: data.user.profilePhoto || null,
+                    profileCompleted: data.user.profileCompleted || false,
+                    createdAt: data.user.createdAt || '',
+                }, false);
+                
+                // Redirect në profile pasi profili nuk është i plotësuar pas regjistrimit
+                setRedirectPath('/profile');
+            } else {
+                // Nëse nuk kthehet token, redirect në login
+                setRedirectPath('/login');
+            }
+            
+            setSuccess(true);
         } catch (err) {
             console.error(err);
             setError('Something went wrong. Please try again.');
@@ -101,6 +120,7 @@ export function useRegister() {
         loading,
         error,
         success,
+        redirectPath,
         handleSubmit,
         toggleShowPassword,
         toggleShowConfirmPassword,

@@ -15,6 +15,7 @@ export function Login() {
         loading,
         error,
         success,
+        redirectPath,
         handleSubmit,
         toggleShowPassword
     } = useLogin();
@@ -22,10 +23,10 @@ export function Login() {
     const navigate = useNavigate();
 
     useEffect(() => {
-        if (success) {
-            navigate('/profile');
+        if (success && redirectPath) {
+            navigate(redirectPath);
         }
-    }, [success, navigate]);
+    }, [success, redirectPath, navigate]);
 
     return (
         <section className="login-section">

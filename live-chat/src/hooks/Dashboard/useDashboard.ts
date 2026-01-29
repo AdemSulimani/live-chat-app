@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { useUser } from '../../contexts/UserContext';
 
 interface Friend {
     id: string;
@@ -73,15 +74,25 @@ export function useDashboard() {
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const chatContainerRef = useRef<HTMLDivElement>(null);
 
-    // Mock user profile
-    const currentUser: User = {
-        id: 'current',
-        name: 'Your Name',
-        username: 'yourusername',
-        avatar: '',
+    const { user } = useUser();
+    
+    // Convert context user to Dashboard User format
+    const currentUser: User = user ? {
+        id: user.id,
+        name: user.displayName || user.name || 'User',
+        username: user.username || '',
+        avatar: user.profilePhoto || '',
         status: 'Online',
-        bio: 'This is my bio. I love chatting with friends!',
-        statusMessage: 'Available for chat'
+        bio: user.bio,
+        statusMessage: user.statusMessage
+    } : {
+        id: '',
+        name: 'Guest',
+        username: '',
+        avatar: '',
+        status: 'Offline',
+        bio: '',
+        statusMessage: ''
     };
 
     // Scroll to bottom when new messages arrive
