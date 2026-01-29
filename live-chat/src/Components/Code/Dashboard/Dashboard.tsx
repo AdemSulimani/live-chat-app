@@ -28,8 +28,13 @@ export function Dashboard() {
         unreadCount,
         currentUser,
         loading,
+        loadingMessages,
+        loadingMoreMessages,
+        hasMoreMessages,
+        isTyping,
         errorMessage,
         successMessage,
+        loadMoreMessages,
         setErrorMessage,
         setSuccessMessage,
         messagesEndRef,
@@ -418,25 +423,71 @@ export function Dashboard() {
 
                         {/* Messages Container */}
                         <div className="messages-container" ref={messagesEndRef}>
-                            {messages.map(message => {
-                                const isOwnMessage = message.senderId === 'current';
-                                return (
-                                    <div
-                                        key={message.id}
-                                        className={`message ${isOwnMessage ? 'own-message' : 'friend-message'}`}
-                                    >
-                                        <div className="message-content">
-                                            <p>{message.content}</p>
-                                            <span className="message-time">
-                                                {new Date(message.timestamp).toLocaleTimeString([], {
-                                                    hour: '2-digit',
-                                                    minute: '2-digit'
-                                                })}
-                                            </span>
+                            {loadingMessages ? (
+                                <div className="messages-loading">
+                                    <div className="loading-spinner"></div>
+                                    <p>Loading messages...</p>
+                                </div>
+                            ) : (
+                                <>
+                                    {/* Load More Button (Pagination) */}
+                                    {hasMoreMessages && (
+                                        <div className="load-more-container">
+                                            {loadingMoreMessages ? (
+                                                <div className="loading-more">
+                                                    <div className="loading-spinner"></div>
+                                                    <p>Loading more messages...</p>
+                                                </div>
+                                            ) : (
+                                                <button 
+                                                    className="load-more-button"
+                                                    onClick={loadMoreMessages}
+                                                >
+                                                    Load More Messages
+                                                </button>
+                                            )}
                                         </div>
-                                    </div>
-                                );
-                            })}
+                                    )}
+                                    
+                                    {messages.length === 0 ? (
+                                        <div className="no-messages">
+                                            <p>No messages yet. Start the conversation!</p>
+                                        </div>
+                                    ) : (
+                                        messages.map(message => {
+                                            const isOwnMessage = message.senderId === 'current';
+                                            return (
+                                                <div
+                                                    key={message.id}
+                                                    className={`message ${isOwnMessage ? 'own-message' : 'friend-message'}`}
+                                                >
+                                                    <div className="message-content">
+                                                        <p>{message.content}</p>
+                                                        <span className="message-time">
+                                                            {new Date(message.timestamp).toLocaleTimeString([], {
+                                                                hour: '2-digit',
+                                                                minute: '2-digit'
+                                                            })}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })
+                                    )}
+                                    
+                                    {/* Typing Indicator */}
+                                    {isTyping && selectedFriend && (
+                                        <div className="typing-indicator">
+                                            <div className="typing-dots">
+                                                <span></span>
+                                                <span></span>
+                                                <span></span>
+                                            </div>
+                                            <p>{selectedFriend.name} is typing...</p>
+                                        </div>
+                                    )}
+                                </>
+                            )}
                             <div ref={messagesEndRef}></div>
                         </div>
 

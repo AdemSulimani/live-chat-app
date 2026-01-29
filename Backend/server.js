@@ -27,6 +27,7 @@ const friendRequestRoutes = require('./routes/friendRequestRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 const blockedRoutes = require('./routes/blockedRoutes');
 const userSearchRoutes = require('./routes/userSearchRoutes');
+const messageRoutes = require('./routes/messageRoutes');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/profile', profileRoutes);
@@ -35,6 +36,7 @@ app.use('/api/friend-requests', friendRequestRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/blocked', blockedRoutes);
 app.use('/api/users', userSearchRoutes);
+app.use('/api/messages', messageRoutes);
 
 // Basic route for testing
 app.get('/', (req, res) => {

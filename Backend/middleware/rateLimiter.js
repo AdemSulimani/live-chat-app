@@ -12,8 +12,25 @@ const loginLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+// Rate limiter për dërgimin e mesazheve
+// Maksimum 30 mesazhe në minutë për çdo përdorues (për të shmangur spam)
+const messageLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minutë
+  max: 30, // Maksimum 30 mesazhe në minutë
+  message: {
+    message: 'Too many messages sent. Please slow down and try again in a moment.',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  // Përdor user ID në vend të IP për rate limiting më të saktë
+  keyGenerator: (req) => {
+    return req.user ? req.user._id.toString() : req.ip;
+  },
+});
+
 module.exports = {
   loginLimiter,
+  messageLimiter,
 };
 
 
