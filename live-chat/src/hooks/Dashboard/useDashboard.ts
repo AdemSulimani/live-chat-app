@@ -55,6 +55,12 @@ export function useDashboard() {
     const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([]);
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [loading, setLoading] = useState(true);
+    const [loadingMessages, setLoadingMessages] = useState(false);
+    const [isTyping, setIsTyping] = useState(false); // Tregues typing për shokun e zgjedhur
+    const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const [hasMoreMessages, setHasMoreMessages] = useState(false); // Për pagination
+    const [currentPage, setCurrentPage] = useState(1);
+    const [loadingMoreMessages, setLoadingMoreMessages] = useState(false);
     const [showAddFriend, setShowAddFriend] = useState(false);
     const [showFriendRequests, setShowFriendRequests] = useState(false);
     const [showMiniProfile, setShowMiniProfile] = useState(false);
@@ -68,7 +74,7 @@ export function useDashboard() {
     const chatContainerRef = useRef<HTMLDivElement>(null);
 
     const { user, getToken } = useUser();
-    const { socket } = useSocket();
+    const { socket, isConnected } = useSocket();
     
     // Convert context user to Dashboard User format
     const currentUser: User = user ? {
@@ -89,10 +95,21 @@ export function useDashboard() {
         statusMessage: ''
     };
 
-    // Scroll to bottom when new messages arrive
+    // ============================================
+    // SCROLL AUTOMATIC TO BOTTOM
+    // ============================================
+    // Scroll automatik te mesazhi i fundit kur:
+    // - Mesazhet e reja shtohen (real-time)
+    // - Mesazhet ngarkohen nga API
+    // - Komponenti mount-ohet
     useEffect(() => {
+        if (messagesEndRef.current && messages.length > 0) {
+            // Përdor setTimeout për të garantuar që DOM është përditësuar
+            setTimeout(() => {
         if (messagesEndRef.current) {
             messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+                }
+            }, 100);
         }
     }, [messages]);
 
@@ -279,37 +296,328 @@ export function useDashboard() {
             setFriendRequests(prev => prev.filter(r => r.id !== data.requestId));
         });
 
+        // ============================================
+        // LISTEN FOR NEW MESSAGES (Real-time)
+        // ============================================
+        // Dëgjo për mesazhe të reja që vijnë nga shokët përmes socket
+        // Mesazhet e reja shtohen real-time në state, por janë tashmë të ruajtura në databazë
+        // nga backend (shih socketServer.js - send_message handler)
+        // 
+        // Kjo garanton që:
+        // - Mesazhet shfaqen menjëherë (real-time)
+        // - Mesazhet ruhen në databazë (persistence)
+        // - Pas refresh, mesazhet ngarkohen nga databaza (shih useEffect më lart)
+        socket.on('new_message', (data: any) => {
+            const message = data.message;
+            
+            // Kontrollo nëse mesazhi është për shokun e zgjedhur aktualisht
+            if (selectedFriend && 
+                (message.senderId === selectedFriend.id || message.receiverId === selectedFriend.id)) {
+                
+                // Formatizo mesazhin për frontend
+                const formattedMessage: Message = {
+                    id: message.id,
+                    senderId: message.senderId === user?.id ? 'current' : message.senderId,
+                    receiverId: message.receiverId === user?.id ? 'current' : message.receiverId,
+                    content: message.content,
+                    timestamp: new Date(message.timestamp),
+                    isRead: message.isRead,
+                };
+
+                // Shto mesazhin në state (vetëm nëse nuk ekziston tashmë)
+                // Kjo është për mesazhet e reja real-time
+                // Mesazhet e vjetra tashmë janë ngarkuar nga API (shih useEffect më lart)
+                setMessages(prev => {
+                    // Kontrollo nëse mesazhi ekziston tashmë (për të shmangur duplicates)
+                    // Kjo mund të ndodhë nëse mesazhi u ngarkua tashmë nga API dhe u dërgua përsëri përmes socket
+                    const exists = prev.some(msg => msg.id === formattedMessage.id);
+                    if (exists) {
+                        return prev;
+                    }
+                    return [...prev, formattedMessage];
+                });
+            }
+        });
+
+        // ============================================
+        // LISTEN FOR TYPING INDICATORS
+        // ============================================
+        // Dëgjo për typing_start dhe typing_stop events
+        socket.on('user_typing', (data: any) => {
+            // Kontrollo nëse typing indicator është për shokun e zgjedhur aktualisht
+            if (selectedFriend && data.userId === selectedFriend.id) {
+                setIsTyping(data.isTyping);
+            }
+        });
+
+        // ============================================
+        // LISTEN FOR MESSAGE READ STATUS
+        // ============================================
+        // Dëgjo për message_read event - kur mesazhi lexohet nga marrësi
+        socket.on('message_read', (data: any) => {
+            const { messageId } = data;
+            
+            // Përditëso statusin e lexuar për mesazhet e përdoruesit aktual
+            setMessages(prev =>
+                prev.map(msg => 
+                    msg.id === messageId ? { ...msg, isRead: true } : msg
+                )
+            );
+        });
+
         // Cleanup listeners on unmount
         return () => {
             socket.off('friend_request_received');
             socket.off('friend_request_accepted');
             socket.off('friend_request_rejected');
+            socket.off('new_message');
+            socket.off('user_typing');
+            socket.off('message_read');
         };
-    }, [socket]);
+    }, [socket, selectedFriend, user]);
 
-    // Load messages for selected friend
+    // ============================================
+    // SEND TYPING INDICATORS
+    // ============================================
+    // Dërgo typing_start dhe typing_stop events kur përdoruesi shkruan
+    // VËREJTJE: isTyping state tregon vetëm kur SHOKU po shkruan, jo kur përdoruesi aktual po shkruan
     useEffect(() => {
-        if (selectedFriend) {
-            // Mock messages
-            const mockMessages: Message[] = [
-                { id: '1', senderId: selectedFriend.id, receiverId: 'current', content: 'Hey! How are you?', timestamp: new Date(Date.now() - 3600000), isRead: true },
-                { id: '2', senderId: 'current', receiverId: selectedFriend.id, content: 'I\'m doing great, thanks!', timestamp: new Date(Date.now() - 1800000), isRead: true },
-                { id: '3', senderId: selectedFriend.id, receiverId: 'current', content: 'Want to hang out later?', timestamp: new Date(Date.now() - 600000), isRead: true },
-            ];
-            setMessages(mockMessages);
+        if (!socket || !selectedFriend || !messageInput.trim()) {
+            // Nëse nuk ka socket, shok të zgjedhur, ose input është bosh, dërgo typing_stop
+            if (socket && selectedFriend) {
+                socket.emit('typing_stop', { receiverId: selectedFriend.id });
+            }
+            // NUK vendosim setIsTyping(false) këtu sepse isTyping tregon statusin e shokut, jo të përdoruesit aktual
+            return;
+        }
+
+        // Dërgo typing_start kur përdoruesi fillon të shkruajë
+        // Kjo do të dërgojë event te shoku që do të shfaqë "typing..." për përdoruesin aktual
+        socket.emit('typing_start', { receiverId: selectedFriend.id });
+        
+        // NUK vendosim setIsTyping(true) këtu sepse isTyping tregon kur SHOKU po shkruan
+        // setIsTyping vendoset vetëm kur merret 'user_typing' event nga shoku (shih listener më lart)
+
+        // Clear timeout i mëparshëm nëse ekziston
+        if (typingTimeoutRef.current) {
+            clearTimeout(typingTimeoutRef.current);
+        }
+
+        // Dërgo typing_stop pas 2 sekondash pa aktivitet
+        typingTimeoutRef.current = setTimeout(() => {
+            if (socket && selectedFriend) {
+                socket.emit('typing_stop', { receiverId: selectedFriend.id });
+            }
+            // NUK vendosim setIsTyping(false) këtu sepse isTyping tregon statusin e shokut
+        }, 2000);
+
+        // Cleanup timeout në unmount ose kur ndryshon input
+        return () => {
+            if (typingTimeoutRef.current) {
+                clearTimeout(typingTimeoutRef.current);
+            }
+        };
+    }, [messageInput, socket, selectedFriend]);
+
+    // ============================================
+    // MARK MESSAGES AS READ
+    // ============================================
+    // Dërgo message_received kur mesazhet shfaqen (për të shënuar si të lexuara)
+    useEffect(() => {
+        if (!socket || !selectedFriend || messages.length === 0) {
+            return;
+        }
+
+        // Gjej mesazhet e palexuara nga shoku i zgjedhur
+        const unreadMessages = messages.filter(
+            msg => msg.senderId === selectedFriend.id && !msg.isRead
+        );
+
+        // Dërgo message_received për çdo mesazh të palexuar
+        unreadMessages.forEach(msg => {
+            socket.emit('message_received', { messageId: msg.id });
+        });
+    }, [messages, socket, selectedFriend]);
+
+    // ============================================
+    // FETCH MESSAGES FROM API - PERSISTENCE AFTER REFRESH
+    // ============================================
+    // Mesazhet ruhen në databazë (backend), kështu që:
+    // 1. Kur hapet chat me një shok, bëhet fetch nga API
+    // 2. Mesazhet e reja shtohen real-time përmes socket (shih listener 'new_message' më poshtë)
+    // 3. Pas refresh, mesazhet ngarkohen automatikisht nga databaza
+    //
+    // Kjo garanton që mesazhet nuk humbasin pas refresh ose mbyllje të browser-it
+    useEffect(() => {
+        const loadMessages = async () => {
+            // Nëse nuk ka shok të zgjedhur, pastro mesazhet dhe typing indicator
+            if (!selectedFriend) {
+                setMessages([]);
+                setIsTyping(false); // Hiq typing indicator kur nuk ka shok të zgjedhur
+                // Show sidebar on mobile when no friend is selected
+                if (window.innerWidth <= 768) {
+                    setShowSidebar(true);
+                }
+                return;
+            }
             
+            // Hiq typing indicator kur ndryshon shoku i zgjedhur
+            setIsTyping(false);
+
+            const token = getToken();
+            if (!token || !user) {
+                return;
+            }
+
+            setLoadingMessages(true);
+            try {
+                // ============================================
+                // GET /api/messages/:friendId
+                // ============================================
+                // Merr mesazhet e ruajtura nga databaza midis përdoruesit aktual dhe shokut të zgjedhur
+                // Kjo funksionon edhe pas refresh - mesazhet janë të ruajtura në databazë
+                // Pagination: default page 1, limit 50 mesazhe
+                const response = await fetch(`http://localhost:5000/api/messages/${selectedFriend.id}?page=1&limit=50`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json',
+                    },
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    // ============================================
+                    // FORMAT MESSAGES FOR FRONTEND
+                    // ============================================
+                    // Konverto mesazhet nga format API në format frontend
+                    // senderId duhet të jetë 'current' për mesazhet e përdoruesit aktual
+                    // ose friendId për mesazhet e shokut
+                    const formattedMessages: Message[] = (data.messages || []).map((msg: any) => ({
+                        id: msg.id,
+                        senderId: msg.senderId === user.id ? 'current' : msg.senderId,
+                        receiverId: msg.receiverId === user.id ? 'current' : msg.receiverId,
+                        content: msg.content,
+                        timestamp: new Date(msg.timestamp),
+                        isRead: msg.isRead,
+                    }));
+                    
+                    // Ruaj mesazhet në state - do të shfaqen automatikisht në UI
+                    // Këto janë mesazhet e ruajtura nga databaza (përfshirë pas refresh)
+                    setMessages(formattedMessages);
+                    
+                    // ============================================
+                    // PAGINATION: SET HAS MORE MESSAGES
+                    // ============================================
+                    // Kontrollo nëse ka më shumë mesazhe për të ngarkuar
+                    if (data.pagination) {
+                        setHasMoreMessages(data.pagination.hasMore || false);
+                        setCurrentPage(1);
+                    } else {
+                        setHasMoreMessages(false);
+                    }
+                    
+                    // ============================================
+                    // PAGINATION: SET HAS MORE MESSAGES
+                    // ============================================
+                    // Kontrollo nëse ka më shumë mesazhe për të ngarkuar
+                    if (data.pagination) {
+                        setHasMoreMessages(data.pagination.hasMore || false);
+                        setCurrentPage(1);
+                    } else {
+                        setHasMoreMessages(false);
+                    }
+                } else if (response.status === 401) {
+                    // Unauthorized - token expired or invalid
+                    console.error('Authentication failed');
+                    // Will be handled by ProtectedRoute
+                    setMessages([]);
+                } else if (response.status === 403) {
+                    // Forbidden - not friends or blocked
+                    const errorData = await response.json().catch(() => ({ message: 'Cannot load messages' }));
+                    console.error('Error loading messages:', errorData.message);
+                    setMessages([]);
+                } else {
+                    const errorData = await response.json().catch(() => ({ message: 'Failed to load messages' }));
+                    console.error('Error loading messages:', errorData.message);
+                    setMessages([]);
+                }
+            } catch (error) {
+                console.error('Error loading messages:', error);
+                setMessages([]);
+            } finally {
+                setLoadingMessages(false);
+            }
+
             // Hide sidebar on mobile when friend is selected
             if (window.innerWidth <= 768) {
                 setShowSidebar(false);
             }
-        } else {
-            setMessages([]);
-            // Show sidebar on mobile when no friend is selected
-            if (window.innerWidth <= 768) {
-                setShowSidebar(true);
-            }
+        };
+
+        loadMessages();
+    }, [selectedFriend, user, getToken]);
+
+    // ============================================
+    // LOAD MORE MESSAGES (PAGINATION)
+    // ============================================
+    // Funksion për të ngarkuar më shumë mesazhe (për chat të gjatë)
+    const loadMoreMessages = async () => {
+        if (!selectedFriend || !hasMoreMessages || loadingMoreMessages) {
+            return;
         }
-    }, [selectedFriend]);
+
+        const token = getToken();
+        if (!token || !user) {
+            return;
+        }
+
+        setLoadingMoreMessages(true);
+        try {
+            const nextPage = currentPage + 1;
+            const response = await fetch(`http://localhost:5000/api/messages/${selectedFriend.id}?page=${nextPage}&limit=50`, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                },
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                
+                // Formatizo mesazhet
+                const formattedMessages: Message[] = (data.messages || []).map((msg: any) => ({
+                    id: msg.id,
+                    senderId: msg.senderId === user.id ? 'current' : msg.senderId,
+                    receiverId: msg.receiverId === user.id ? 'current' : msg.receiverId,
+                    content: msg.content,
+                    timestamp: new Date(msg.timestamp),
+                    isRead: msg.isRead,
+                }));
+                
+                // Shto mesazhet e vjetra në fillim (pasi janë më të vjetrat)
+                setMessages(prev => [...formattedMessages, ...prev]);
+                
+                // Përditëso pagination state
+                if (data.pagination) {
+                    setHasMoreMessages(data.pagination.hasMore || false);
+                    setCurrentPage(nextPage);
+                } else {
+                    setHasMoreMessages(false);
+                }
+            } else {
+                console.error('Failed to load more messages');
+                setHasMoreMessages(false);
+            }
+        } catch (error) {
+            console.error('Error loading more messages:', error);
+            setHasMoreMessages(false);
+        } finally {
+            setLoadingMoreMessages(false);
+        }
+    };
     
     const handleFriendClick = (friend: Friend) => {
         setSelectedFriend(friend);
@@ -320,20 +628,112 @@ export function useDashboard() {
         setSelectedFriend(null);
     };
 
+    // ============================================
+    // SEND MESSAGE VIA SOCKET
+    // ============================================
     const handleSendMessage = (e: React.FormEvent) => {
         e.preventDefault();
-        if (messageInput.trim() && selectedFriend) {
-            const newMessage: Message = {
-                id: Date.now().toString(),
+        
+        if (!messageInput.trim() || !selectedFriend) {
+            return;
+        }
+
+        // ============================================
+        // ERROR HANDLING: SOCKET CONNECTION CHECK
+        // ============================================
+        if (!socket || !isConnected) {
+            setErrorMessage('Socket connection not available. Real-time messaging may not work. Please refresh the page.');
+            setTimeout(() => setErrorMessage(null), 5000);
+            return;
+        }
+
+        const messageContent = messageInput.trim();
+        const tempId = `temp-${Date.now()}`; // Temporary ID për optimistic update
+        
+        // ============================================
+        // OPTIMISTIC UPDATE
+        // ============================================
+        // Shto mesazhin optimistikisht në state për UI të shpejtë
+        const optimisticMessage: Message = {
+            id: tempId,
                 senderId: 'current',
                 receiverId: selectedFriend.id,
-                content: messageInput.trim(),
+            content: messageContent,
                 timestamp: new Date(),
                 isRead: false
             };
-            setMessages(prev => [...prev, newMessage]);
-            setMessageInput('');
-        }
+        
+        setMessages(prev => [...prev, optimisticMessage]);
+        setMessageInput(''); // Pastro input menjëherë
+
+        // ============================================
+        // SEND VIA SOCKET
+        // ============================================
+        // Dërgo mesazhin përmes socket
+        socket.emit('send_message', {
+            receiverId: selectedFriend.id,
+            content: messageContent,
+        });
+
+        // ============================================
+        // HANDLE SOCKET RESPONSES
+        // ============================================
+        // Dëgjo për konfirmim të suksesit
+        const handleMessageSent = (data: any) => {
+            // Mesazhi u dërgua me sukses - zëvendëso optimistic message me mesazhin real
+            const realMessage: Message = {
+                id: data.data.id,
+                senderId: data.data.senderId === user?.id ? 'current' : data.data.senderId,
+                receiverId: data.data.receiverId === user?.id ? 'current' : data.data.receiverId,
+                content: data.data.content,
+                timestamp: new Date(data.data.timestamp),
+                isRead: data.data.isRead,
+            };
+
+            // Zëvendëso optimistic message me mesazhin real
+            setMessages(prev => 
+                prev.map(msg => msg.id === tempId ? realMessage : msg)
+            );
+
+            // Hiq listener pasi mesazhi u dërgua me sukses
+            socket.off('message_sent', handleMessageSent);
+            socket.off('message_error', handleMessageError);
+        };
+
+        // Dëgjo për gabime
+        const handleMessageError = (error: any) => {
+            // Mesazhi dështoi - hiq optimistic message dhe trego gabim
+            setMessages(prev => prev.filter(msg => msg.id !== tempId));
+            setErrorMessage(error.message || 'Failed to send message. Please try again.');
+            setTimeout(() => setErrorMessage(null), 5000);
+
+            // Hiq listeners
+            socket.off('message_sent', handleMessageSent);
+            socket.off('message_error', handleMessageError);
+        };
+
+        // Regjistro listeners
+        socket.once('message_sent', handleMessageSent);
+        socket.once('message_error', handleMessageError);
+
+        // Timeout fallback - nëse nuk marrim përgjigje brenda 10 sekondave
+        setTimeout(() => {
+            // Kontrollo nëse mesazhi optimistic ende ekziston (nuk u zëvendësua)
+            setMessages(prev => {
+                const stillOptimistic = prev.find(msg => msg.id === tempId);
+                if (stillOptimistic) {
+                    // Nuk morëm përgjigje - hiq optimistic message dhe trego gabim
+                    setErrorMessage('Message sending timeout. Please check your connection and try again.');
+                    setTimeout(() => setErrorMessage(null), 5000);
+                    return prev.filter(msg => msg.id !== tempId);
+                }
+                return prev;
+            });
+
+            // Hiq listeners nëse ende janë aktiv
+            socket.off('message_sent', handleMessageSent);
+            socket.off('message_error', handleMessageError);
+        }, 10000);
     };
 
     const handleAddFriend = async (e: React.FormEvent) => {
@@ -749,11 +1149,16 @@ export function useDashboard() {
         unreadCount,
         currentUser,
         loading,
+        loadingMessages,
+        loadingMoreMessages,
+        hasMoreMessages,
+        isTyping,
         errorMessage,
         successMessage,
         setErrorMessage,
         setSuccessMessage,
         messagesEndRef,
+        loadMoreMessages,
         chatContainerRef,
         handleSendMessage,
         handleAddFriend,

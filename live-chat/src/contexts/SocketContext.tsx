@@ -24,12 +24,17 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    // Initialize socket connection
+    // Initialize socket connection with auto-reconnect
     const newSocket = io('http://localhost:5000', {
       auth: {
         token: token,
       },
       transports: ['websocket', 'polling'],
+      reconnection: true, // Enable auto-reconnect
+      reconnectionDelay: 1000, // Wait 1 second before attempting to reconnect
+      reconnectionDelayMax: 5000, // Maximum delay between reconnection attempts
+      reconnectionAttempts: 5, // Maximum number of reconnection attempts
+      timeout: 20000, // Connection timeout
     });
 
     newSocket.on('connect', () => {
