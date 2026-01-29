@@ -65,6 +65,20 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    // Friends array - stores references to other users
+    friends: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+      },
+    ],
+    // Blocked users array - stores references to blocked users
+    blockedUsers: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+      },
+    ],
   },
   {
     timestamps: true, // createdAt, updatedAt
