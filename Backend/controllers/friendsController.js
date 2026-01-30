@@ -1,5 +1,6 @@
 const User = require('../models/User');
 const FriendRequest = require('../models/FriendRequest');
+const Message = require('../models/Message');
 
 // @desc    Get user's friends list
 // @route   GET /api/friends
@@ -19,18 +20,30 @@ const getFriends = async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    // Format friends data
-    const friends = user.friends.map(friend => ({
-      id: friend._id.toString(),
-      name: friend.displayName || friend.name,
-      username: friend.username,
-      avatar: friend.profilePhoto || '',
-      isOnline: false, // TODO: Implement online status tracking
-    }));
+    // Format friends data with unread message counts
+    const friendsWithUnreadCounts = await Promise.all(
+      user.friends.map(async (friend) => {
+        // Count unread messages from this friend
+        const unreadCount = await Message.countDocuments({
+          senderId: friend._id,
+          receiverId: req.user._id,
+          isRead: false,
+        });
+
+        return {
+          id: friend._id.toString(),
+          name: friend.displayName || friend.name,
+          username: friend.username,
+          avatar: friend.profilePhoto || '',
+          isOnline: false, // TODO: Implement online status tracking
+          unreadCount: unreadCount,
+        };
+      })
+    );
 
     return res.status(200).json({
       message: 'Friends retrieved successfully',
-      friends: friends,
+      friends: friendsWithUnreadCounts,
     });
   } catch (error) {
     console.error('Get friends error:', error);
