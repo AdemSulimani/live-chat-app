@@ -1,4 +1,5 @@
 const rateLimit = require('express-rate-limit');
+const { ipKeyGenerator } = require('express-rate-limit');
 
 // Rate limiter specifik për login
 // p.sh. maksimum 15 tentativa çdo 15 minuta nga i njëjti IP
@@ -24,7 +25,7 @@ const messageLimiter = rateLimit({
   legacyHeaders: false,
   // Përdor user ID në vend të IP për rate limiting më të saktë
   keyGenerator: (req) => {
-    return req.user ? req.user._id.toString() : req.ip;
+    return req.user ? req.user._id.toString() : ipKeyGenerator(req);
   },
 });
 
