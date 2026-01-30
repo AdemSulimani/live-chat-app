@@ -9,6 +9,7 @@ interface Friend {
     avatar: string;
     isOnline: boolean;
     lastSeen?: string;
+    unreadCount?: number;
 }
 
 interface Message {
@@ -18,6 +19,10 @@ interface Message {
     content: string;
     timestamp: Date;
     isRead: boolean;
+    isEdited?: boolean;
+    editedAt?: Date;
+    isDeleted?: boolean;
+    deletedAt?: Date;
 }
 
 interface FriendRequest {
@@ -34,6 +39,7 @@ interface Notification {
     message: string;
     timestamp: Date;
     isRead: boolean;
+    relatedUserId?: string | null;
 }
 
 interface User {
@@ -58,6 +64,7 @@ export function useDashboard() {
     const [loadingMessages, setLoadingMessages] = useState(false);
     const [isTyping, setIsTyping] = useState(false); // Tregues typing për shokun e zgjedhur
     const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const previousSelectedFriendRef = useRef<Friend | null>(null);
     const [hasMoreMessages, setHasMoreMessages] = useState(false); // Për pagination
     const [currentPage, setCurrentPage] = useState(1);
     const [loadingMoreMessages, setLoadingMoreMessages] = useState(false);
@@ -69,6 +76,12 @@ export function useDashboard() {
     const [addFriendInput, setAddFriendInput] = useState('');
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
+    
+    // Message edit and options state
+    const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+    const [editMessageContent, setEditMessageContent] = useState('');
+    const [hoveredMessageId, setHoveredMessageId] = useState<string | null>(null);
+    const [showMessageOptions, setShowMessageOptions] = useState<string | null>(null);
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -309,15 +322,16 @@ export function useDashboard() {
         // - Pas refresh, mesazhet ngarkohen nga databaza (shih useEffect më lart)
         socket.on('new_message', (data: any) => {
             const message = data.message;
+            const senderId = message.senderId;
             
             // Kontrollo nëse mesazhi është për shokun e zgjedhur aktualisht
             if (selectedFriend && 
-                (message.senderId === selectedFriend.id || message.receiverId === selectedFriend.id)) {
+                (senderId === selectedFriend.id || message.receiverId === selectedFriend.id)) {
                 
                 // Formatizo mesazhin për frontend
                 const formattedMessage: Message = {
                     id: message.id,
-                    senderId: message.senderId === user?.id ? 'current' : message.senderId,
+                    senderId: senderId === user?.id ? 'current' : senderId,
                     receiverId: message.receiverId === user?.id ? 'current' : message.receiverId,
                     content: message.content,
                     timestamp: new Date(message.timestamp),
@@ -336,7 +350,45 @@ export function useDashboard() {
                     }
                     return [...prev, formattedMessage];
                 });
+
+                // ============================================
+                // CLEAR TYPING INDICATOR WHEN MESSAGE RECEIVED
+                // ============================================
+                // Nëse mesazhi vjen nga shoku i zgjedhur, hiq typing indicator
+                // Kjo garanton që typing indicator fshihet kur mesazhi merret
+                if (senderId === selectedFriend.id) {
+                    setIsTyping(false);
+                }
+            } else if (senderId !== user?.id) {
+                // Mesazhi vjen nga një shok tjetër (jo i zgjedhur aktualisht)
+                // Rrit numrin e mesazheve të palexuara për atë shok
+                setFriends(prev => prev.map(friend => {
+                    if (friend.id === senderId) {
+                        return {
+                            ...friend,
+                            unreadCount: (friend.unreadCount || 0) + 1,
+                        };
+                    }
+                    return friend;
+                }));
             }
+        });
+
+        // ============================================
+        // LISTEN FOR NEW NOTIFICATIONS
+        // ============================================
+        socket.on('new_notification', (data: any) => {
+            setNotifications(prev => [
+                {
+                    id: data.id,
+                    type: data.type as any,
+                    message: data.message,
+                    timestamp: new Date(data.timestamp),
+                    isRead: data.isRead,
+                    relatedUserId: data.relatedUserId || null,
+                },
+                ...prev
+            ]);
         });
 
         // ============================================
@@ -365,16 +417,140 @@ export function useDashboard() {
             );
         });
 
+        // ============================================
+        // LISTEN FOR MESSAGE EDITED (REAL-TIME SYNC)
+        // ============================================
+        // Dëgjo për message_edited event - kur mesazhi editohet nga përdoruesi tjetër
+        // Kjo garanton që të gjithë pjesëmarrësit shohin ndryshimin menjëherë
+        socket.on('message_edited', (data: any) => {
+            const message = data.data;
+            if (!message) return;
+
+            // Kontrollo nëse mesazhi është për shokun e zgjedhur aktualisht
+            // Ose nëse mesazhi është i përdoruesit aktual (për të përditësuar edhe nëse nuk është në chat)
+            if (selectedFriend && 
+                (message.senderId === selectedFriend.id || 
+                 message.receiverId === selectedFriend.id ||
+                 message.senderId === user?.id || 
+                 message.receiverId === user?.id)) {
+                
+                // Formatizo mesazhin për frontend
+                const formattedMessage: Message = {
+                    id: message.id,
+                    senderId: message.senderId === user?.id ? 'current' : message.senderId,
+                    receiverId: message.receiverId === user?.id ? 'current' : message.receiverId,
+                    content: message.content,
+                    timestamp: new Date(message.timestamp),
+                    isRead: message.isRead,
+                    isEdited: message.isEdited || true,
+                    editedAt: message.editedAt ? new Date(message.editedAt) : new Date(),
+                };
+
+                // Përditëso mesazhin në state menjëherë (real-time sync)
+                // IMPORTANT: Përdorim .map() për të ruajtur pozicionin e mesazhit në listë
+                // Mesazhi mbetet në të njëjtin pozicion edhe pas editimit nga përdoruesi tjetër
+                setMessages(prev => {
+                    // Kontrollo nëse mesazhi ekziston tashmë në listë
+                    const messageExists = prev.some(msg => msg.id === formattedMessage.id);
+                    if (messageExists) {
+                        // Mesazhi ekziston - përditëso në vend
+                        return prev.map(msg => 
+                            msg.id === formattedMessage.id ? formattedMessage : msg
+                        );
+                    } else {
+                        // Mesazhi nuk ekziston - shto në listë (nëse është për chat-in aktual)
+                        return [...prev, formattedMessage];
+                    }
+                });
+            }
+        });
+
+        // ============================================
+        // LISTEN FOR MESSAGE DELETED (REAL-TIME SYNC)
+        // ============================================
+        // Dëgjo për message_deleted event - kur mesazhi fshihet nga përdoruesi tjetër
+        // Kjo garanton që të gjithë pjesëmarrësit shohin fshirjen menjëherë
+        socket.on('message_deleted', (data: any) => {
+            const message = data.data;
+            if (!message) return;
+
+            // Kontrollo nëse mesazhi është për shokun e zgjedhur aktualisht
+            // Ose nëse mesazhi është i përdoruesit aktual (për të përditësuar edhe nëse nuk është në chat)
+            if (selectedFriend && 
+                (message.senderId === selectedFriend.id || 
+                 message.receiverId === selectedFriend.id ||
+                 message.senderId === user?.id || 
+                 message.receiverId === user?.id)) {
+                
+                // Formatizo mesazhin për frontend
+                const formattedMessage: Message = {
+                    id: message.id,
+                    senderId: message.senderId === user?.id ? 'current' : message.senderId,
+                    receiverId: message.receiverId === user?.id ? 'current' : message.receiverId,
+                    content: message.content || 'This message was deleted',
+                    timestamp: new Date(message.timestamp),
+                    isRead: message.isRead,
+                    isDeleted: message.isDeleted || true,
+                    deletedAt: message.deletedAt ? new Date(message.deletedAt) : new Date(),
+                };
+
+                // Përditëso mesazhin në state menjëherë (real-time sync)
+                // IMPORTANT: Përdorim .map() për të ruajtur pozicionin e mesazhit në listë
+                // Mesazhi shfaqet si i fshirë në të njëjtin pozicion (nuk hiqet nga lista)
+                setMessages(prev => {
+                    // Kontrollo nëse mesazhi ekziston tashmë në listë
+                    const messageExists = prev.some(msg => msg.id === formattedMessage.id);
+                    if (messageExists) {
+                        // Mesazhi ekziston - përditëso në vend
+                        return prev.map(msg => 
+                            msg.id === formattedMessage.id ? formattedMessage : msg
+                        );
+                    } else {
+                        // Mesazhi nuk ekziston - shto në listë (nëse është për chat-in aktual)
+                        return [...prev, formattedMessage];
+                    }
+                });
+            }
+        });
+
         // Cleanup listeners on unmount
         return () => {
             socket.off('friend_request_received');
             socket.off('friend_request_accepted');
             socket.off('friend_request_rejected');
             socket.off('new_message');
+            socket.off('new_notification');
             socket.off('user_typing');
             socket.off('message_read');
+            socket.off('message_edited');
+            socket.off('message_deleted');
         };
     }, [socket, selectedFriend, user]);
+
+    // ============================================
+    // CLEANUP TYPING INDICATOR WHEN FRIEND CHANGES
+    // ============================================
+    // Kur ndryshon shoku i zgjedhur, dërgo typing_stop te shoku i mëparshëm
+    useEffect(() => {
+        if (!socket) return;
+
+        const previousFriend = previousSelectedFriendRef.current;
+        
+        // Nëse ka shok të mëparshëm dhe është i ndryshëm nga ai aktual, dërgo typing_stop
+        if (previousFriend && previousFriend.id !== selectedFriend?.id) {
+            socket.emit('typing_stop', { receiverId: previousFriend.id });
+        }
+
+        // Përditëso ref me shokun aktual
+        previousSelectedFriendRef.current = selectedFriend;
+
+        // Cleanup: kur komponenti unmount-ohet, dërgo typing_stop
+        return () => {
+            if (previousSelectedFriendRef.current && socket) {
+                socket.emit('typing_stop', { receiverId: previousSelectedFriendRef.current.id });
+            }
+        };
+    }, [selectedFriend, socket]);
 
     // ============================================
     // SEND TYPING INDICATORS
@@ -382,12 +558,18 @@ export function useDashboard() {
     // Dërgo typing_start dhe typing_stop events kur përdoruesi shkruan
     // VËREJTJE: isTyping state tregon vetëm kur SHOKU po shkruan, jo kur përdoruesi aktual po shkruan
     useEffect(() => {
-        if (!socket || !selectedFriend || !messageInput.trim()) {
-            // Nëse nuk ka socket, shok të zgjedhur, ose input është bosh, dërgo typing_stop
-            if (socket && selectedFriend) {
-                socket.emit('typing_stop', { receiverId: selectedFriend.id });
+        if (!socket || !selectedFriend) {
+            return;
+        }
+
+        // Nëse input është bosh, dërgo typing_stop
+        if (!messageInput.trim()) {
+            socket.emit('typing_stop', { receiverId: selectedFriend.id });
+            // Clear timeout nëse ekziston
+            if (typingTimeoutRef.current) {
+                clearTimeout(typingTimeoutRef.current);
+                typingTimeoutRef.current = null;
             }
-            // NUK vendosim setIsTyping(false) këtu sepse isTyping tregon statusin e shokut, jo të përdoruesit aktual
             return;
         }
 
@@ -403,21 +585,81 @@ export function useDashboard() {
             clearTimeout(typingTimeoutRef.current);
         }
 
-        // Dërgo typing_stop pas 2 sekondash pa aktivitet
-        typingTimeoutRef.current = setTimeout(() => {
-            if (socket && selectedFriend) {
-                socket.emit('typing_stop', { receiverId: selectedFriend.id });
-            }
-            // NUK vendosim setIsTyping(false) këtu sepse isTyping tregon statusin e shokut
-        }, 2000);
+        // NUK dërgojmë më typing_stop automatikisht pas 2 sekondash
+        // Typing indicator do të qëndrojë deri sa:
+        // 1. Input bëhet bosh (përdoruesi ndalon së shkruari)
+        // 2. Mesazhi dërgohet (shih handleSendMessage)
+        // 3. Shoku i zgjedhur ndryshon
 
         // Cleanup timeout në unmount ose kur ndryshon input
         return () => {
             if (typingTimeoutRef.current) {
                 clearTimeout(typingTimeoutRef.current);
+                typingTimeoutRef.current = null;
             }
         };
     }, [messageInput, socket, selectedFriend]);
+
+    // ============================================
+    // TRACK ACTIVE CHAT
+    // ============================================
+    // Dërgo enter_chat kur përdoruesi hyn në chat me një shok
+    // dhe leave_chat kur del nga chat
+    // Gjithashtu shëno njoftimet e mesazheve si të lexuara kur hyn në chat
+    useEffect(() => {
+        if (!socket) return;
+
+        if (selectedFriend) {
+            // Përdoruesi hyn në chat me këtë shok
+            socket.emit('enter_chat', { friendId: selectedFriend.id });
+
+            // Shëno njoftimet e mesazheve për këtë shok si të lexuara
+            const markNotificationsAsRead = async () => {
+                const token = getToken();
+                if (!token) return;
+
+                try {
+                    const response = await fetch(`http://localhost:5000/api/notifications/read-by-user/${selectedFriend.id}`, {
+                        method: 'PUT',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json',
+                        },
+                    });
+
+                    if (response.ok) {
+                        // Përditëso state lokal për njoftimet
+                        // Kjo do të përditësojë automatikisht unreadCount sepse ai llogaritet nga notifications
+                        setNotifications(prev => prev.map(notification => {
+                            // Kontrollo nëse njoftimi është mesazh dhe është nga shoku i zgjedhur
+                            if (notification.type === 'message' && 
+                                notification.relatedUserId && 
+                                selectedFriend.id &&
+                                notification.relatedUserId.toString() === selectedFriend.id.toString() && 
+                                !notification.isRead) {
+                                return { ...notification, isRead: true };
+                            }
+                            return notification;
+                        }));
+                    }
+                } catch (error) {
+                    console.error('Error marking notifications as read:', error);
+                }
+            };
+
+            markNotificationsAsRead();
+        } else {
+            // Përdoruesi del nga chat
+            socket.emit('leave_chat');
+        }
+
+        // Cleanup: kur komponenti unmount-ohet ose ndryshon selectedFriend, dërgo leave_chat
+        return () => {
+            if (socket) {
+                socket.emit('leave_chat');
+            }
+        };
+    }, [socket, selectedFriend, getToken]);
 
     // ============================================
     // MARK MESSAGES AS READ
@@ -437,6 +679,19 @@ export function useDashboard() {
         unreadMessages.forEach(msg => {
             socket.emit('message_received', { messageId: msg.id });
         });
+
+        // Rivendos numrin e mesazheve të palexuara për shokun e zgjedhur
+        if (unreadMessages.length > 0) {
+            setFriends(prev => prev.map(friend => {
+                if (friend.id === selectedFriend.id) {
+                    return {
+                        ...friend,
+                        unreadCount: 0,
+                    };
+                }
+                return friend;
+            }));
+        }
     }, [messages, socket, selectedFriend]);
 
     // ============================================
@@ -501,11 +756,25 @@ export function useDashboard() {
                         content: msg.content,
                         timestamp: new Date(msg.timestamp),
                         isRead: msg.isRead,
+                        // Përfshi fusha për edit dhe delete për sync real-time
+                        isEdited: msg.isEdited || false,
+                        editedAt: msg.editedAt ? new Date(msg.editedAt) : undefined,
+                        isDeleted: msg.isDeleted || false,
+                        deletedAt: msg.deletedAt ? new Date(msg.deletedAt) : undefined,
                     }));
                     
                     // Ruaj mesazhet në state - do të shfaqen automatikisht në UI
                     // Këto janë mesazhet e ruajtura nga databaza (përfshirë pas refresh)
                     setMessages(formattedMessages);
+                    
+                    // ============================================
+                    // REQUEST TYPING STATUS WHEN ENTERING CHAT
+                    // ============================================
+                    // Kur hyn në chat, kërko typing status për shokun e zgjedhur
+                    // Kjo garanton që typing indicator shfaqet edhe pas refresh
+                    if (socket && selectedFriend) {
+                        socket.emit('request_typing_status', { friendId: selectedFriend.id });
+                    }
                     
                     // ============================================
                     // PAGINATION: SET HAS MORE MESSAGES
@@ -621,6 +890,16 @@ export function useDashboard() {
     
     const handleFriendClick = (friend: Friend) => {
         setSelectedFriend(friend);
+        // Rivendos numrin e mesazheve të palexuara kur shoku klikohet
+        setFriends(prev => prev.map(f => {
+            if (f.id === friend.id) {
+                return {
+                    ...f,
+                    unreadCount: 0,
+                };
+            }
+            return f;
+        }));
     };
     
     const handleBackToSidebar = () => {
@@ -665,6 +944,19 @@ export function useDashboard() {
         
         setMessages(prev => [...prev, optimisticMessage]);
         setMessageInput(''); // Pastro input menjëherë
+
+        // ============================================
+        // STOP TYPING INDICATOR WHEN MESSAGE IS SENT
+        // ============================================
+        // Dërgo typing_stop menjëherë kur mesazhi dërgohet
+        // Kjo garanton që typing indicator fshihet te përdoruesi tjetër
+        socket.emit('typing_stop', { receiverId: selectedFriend.id });
+        
+        // Clear timeout nëse ekziston
+        if (typingTimeoutRef.current) {
+            clearTimeout(typingTimeoutRef.current);
+            typingTimeoutRef.current = null;
+        }
 
         // ============================================
         // SEND VIA SOCKET
@@ -1123,6 +1415,408 @@ export function useDashboard() {
         setShowBlockConfirm(false);
     };
 
+    // ============================================
+    // MESSAGE EDIT FUNCTIONS
+    // ============================================
+    const handleStartEdit = (messageId: string) => {
+        // Gjej mesazhin që duhet të editohet
+        const messageToEdit = messages.find(msg => msg.id === messageId);
+        
+        if (!messageToEdit) {
+            setErrorMessage('Message not found');
+            setTimeout(() => setErrorMessage(null), 5000);
+            return;
+        }
+
+        // Verifikojmë që mesazhi është i përdoruesit aktual
+        if (messageToEdit.senderId !== 'current') {
+            setErrorMessage('You can only edit your own messages');
+            setTimeout(() => setErrorMessage(null), 5000);
+            return;
+        }
+
+        // Verifikojmë që mesazhi nuk është i fshirë
+        if (messageToEdit.isDeleted) {
+            setErrorMessage('Cannot edit a deleted message');
+            setTimeout(() => setErrorMessage(null), 5000);
+            return;
+        }
+
+        // Vendos state për editim
+        setEditingMessageId(messageId);
+        setEditMessageContent(messageToEdit.content);
+        setShowMessageOptions(null); // Fshi menu-n e opsioneve
+    };
+
+    const handleSaveEdit = (messageId: string) => {
+        // Validim përmbajtje
+        const trimmedContent = editMessageContent.trim();
+        
+        if (!trimmedContent) {
+            setErrorMessage('Message content cannot be empty');
+            setTimeout(() => setErrorMessage(null), 5000);
+            return;
+        }
+
+        if (trimmedContent.length > 5000) {
+            setErrorMessage('Message is too long. Maximum 5000 characters allowed.');
+            setTimeout(() => setErrorMessage(null), 5000);
+            return;
+        }
+
+        // Gjej mesazhin që duhet të editohet
+        const messageToEdit = messages.find(msg => msg.id === messageId);
+        
+        if (!messageToEdit) {
+            setErrorMessage('Message not found');
+            setTimeout(() => setErrorMessage(null), 5000);
+            return;
+        }
+
+        // Verifikojmë që mesazhi është i përdoruesit aktual
+        if (messageToEdit.senderId !== 'current') {
+            setErrorMessage('You can only edit your own messages');
+            setTimeout(() => setErrorMessage(null), 5000);
+            return;
+        }
+
+        // Verifikojmë që mesazhi nuk është i fshirë
+        if (messageToEdit.isDeleted) {
+            setErrorMessage('Cannot edit a deleted message');
+            setTimeout(() => setErrorMessage(null), 5000);
+            return;
+        }
+
+        // ============================================
+        // ERROR HANDLING: SOCKET CONNECTION CHECK
+        // ============================================
+        if (!socket || !isConnected) {
+            setErrorMessage('Socket connection not available. Please refresh the page.');
+            setTimeout(() => setErrorMessage(null), 5000);
+            return;
+        }
+
+        // ============================================
+        // OPTIMISTIC UPDATE
+        // ============================================
+        // Përditëso mesazhin optimistikisht në UI menjëherë për përvojë më të mirë
+        // Nëse dërgimi dështon, mesazhi do të rikthehet në versionin origjinal
+        // IMPORTANT: Përdorim .map() për të ruajtur pozicionin e mesazhit në listë
+        // Mesazhi mbetet në të njëjtin pozicion edhe pas editimit
+        const editedAt = new Date();
+        const originalMessage = { ...messageToEdit }; // Ruaj kopje të mesazhit origjinal për rikthim
+        setMessages(prev => 
+            prev.map(msg => 
+                msg.id === messageId 
+                    ? { 
+                        ...msg, 
+                        content: trimmedContent,
+                        isEdited: true,
+                        editedAt: editedAt
+                    } 
+                    : msg
+            )
+        );
+
+        // ============================================
+        // SEND EDIT VIA SOCKET
+        // ============================================
+        socket.emit('edit_message', {
+            messageId: messageId,
+            newContent: trimmedContent,
+        });
+
+        // ============================================
+        // HANDLE SOCKET RESPONSES
+        // ============================================
+        // Dëgjo për konfirmim të suksesit
+        let editTimeoutId: NodeJS.Timeout | null = null;
+        const handleMessageEdited = (data: any) => {
+            // Pastro timeout nëse mesazhi u editua me sukses
+            if (editTimeoutId) {
+                clearTimeout(editTimeoutId);
+                editTimeoutId = null;
+            }
+
+            // Mesazhi u editua me sukses - përditëso me të dhënat e reja nga serveri
+            if (data.data && data.data.id === messageId) {
+                const editedMessage: Message = {
+                    id: data.data.id,
+                    senderId: data.data.senderId === user?.id ? 'current' : data.data.senderId,
+                    receiverId: data.data.receiverId === user?.id ? 'current' : data.data.receiverId,
+                    content: data.data.content,
+                    timestamp: new Date(data.data.timestamp),
+                    isRead: data.data.isRead,
+                    isEdited: data.data.isEdited || true,
+                    editedAt: data.data.editedAt ? new Date(data.data.editedAt) : editedAt,
+                };
+
+                // Përditëso mesazhin me të dhënat e reja
+                // IMPORTANT: Përdorim .map() për të ruajtur pozicionin e mesazhit në listë
+                // Mesazhi mbetet në të njëjtin pozicion edhe pas editimit
+                setMessages(prev => 
+                    prev.map(msg => msg.id === messageId ? editedMessage : msg)
+                );
+            }
+
+            // Hiq listener pasi mesazhi u editua me sukses
+            socket.off('message_edited', handleMessageEdited);
+            socket.off('message_edit_error', handleEditError);
+        };
+
+        // Dëgjo për gabime
+        const handleEditError = (error: any) => {
+            // Pastro timeout nëse kemi gabim
+            if (editTimeoutId) {
+                clearTimeout(editTimeoutId);
+                editTimeoutId = null;
+            }
+
+            // ============================================
+            // ROLLBACK OPTIMISTIC UPDATE
+            // ============================================
+            // Editimi dështoi - rikthe mesazhin origjinal
+            setMessages(prev => 
+                prev.map(msg => 
+                    msg.id === messageId 
+                        ? { 
+                            ...msg, 
+                            content: originalMessage.content,
+                            isEdited: originalMessage.isEdited || false,
+                            editedAt: originalMessage.editedAt
+                        } 
+                        : msg
+                )
+            );
+            setErrorMessage(error.message || 'Failed to edit message. Please try again.');
+            setTimeout(() => setErrorMessage(null), 5000);
+
+            // Hiq listeners
+            socket.off('message_edited', handleMessageEdited);
+            socket.off('message_edit_error', handleEditError);
+        };
+
+        // Regjistro listeners
+        socket.once('message_edited', handleMessageEdited);
+        socket.once('message_edit_error', handleEditError);
+
+        // ============================================
+        // TIMEOUT FALLBACK
+        // ============================================
+        // Nëse nuk marrim përgjigje brenda 10 sekondave, rikthe mesazhin origjinal
+        editTimeoutId = setTimeout(() => {
+            // Kontrollo nëse mesazhi ende ka optimistic update (nuk u konfirmua)
+            setMessages(prev => {
+                const message = prev.find(msg => msg.id === messageId);
+                if (message && message.isEdited && message.content === trimmedContent) {
+                    // Nuk morëm përgjigje - rikthe mesazhin origjinal
+                    setErrorMessage('Message edit timeout. Please check your connection and try again.');
+                    setTimeout(() => setErrorMessage(null), 5000);
+                    return prev.map(msg => 
+                        msg.id === messageId 
+                            ? { 
+                                ...msg, 
+                                content: originalMessage.content,
+                                isEdited: originalMessage.isEdited || false,
+                                editedAt: originalMessage.editedAt
+                            } 
+                            : msg
+                    );
+                }
+                return prev;
+            });
+
+            // Hiq listeners nëse ende janë aktiv
+            socket.off('message_edited', handleMessageEdited);
+            socket.off('message_edit_error', handleEditError);
+        }, 10000);
+
+        // Pastro state-et e editimit
+        setEditingMessageId(null);
+        setEditMessageContent('');
+    };
+
+    const handleCancelEdit = () => {
+        // Anulo editimin dhe fshi state-et
+        setEditingMessageId(null);
+        setEditMessageContent('');
+    };
+
+    // ============================================
+    // MESSAGE DELETE/UNSEND FUNCTION
+    // ============================================
+    const handleDeleteMessage = (messageId: string) => {
+        // Gjej mesazhin që duhet të fshihet
+        const messageToDelete = messages.find(msg => msg.id === messageId);
+        
+        if (!messageToDelete) {
+            setErrorMessage('Message not found');
+            setTimeout(() => setErrorMessage(null), 5000);
+            return;
+        }
+
+        // Verifikojmë që mesazhi është i përdoruesit aktual
+        if (messageToDelete.senderId !== 'current') {
+            setErrorMessage('You can only delete your own messages');
+            setTimeout(() => setErrorMessage(null), 5000);
+            return;
+        }
+
+        // Verifikojmë që mesazhi nuk është tashmë i fshirë
+        if (messageToDelete.isDeleted) {
+            setErrorMessage('Message is already deleted');
+            setTimeout(() => setErrorMessage(null), 5000);
+            return;
+        }
+
+        // ============================================
+        // ERROR HANDLING: SOCKET CONNECTION CHECK
+        // ============================================
+        if (!socket || !isConnected) {
+            setErrorMessage('Socket connection not available. Please refresh the page.');
+            setTimeout(() => setErrorMessage(null), 5000);
+            return;
+        }
+
+        // ============================================
+        // OPTIMISTIC UPDATE
+        // ============================================
+        // Fshi mesazhin optimistikisht nga UI menjëherë për përvojë më të mirë
+        // Nëse dërgimi dështon, mesazhi do të rikthehet në versionin origjinal
+        // IMPORTANT: Përdorim .map() për të ruajtur pozicionin e mesazhit në listë
+        // Mesazhi shfaqet si i fshirë në të njëjtin pozicion (nuk hiqet nga lista)
+        // Nëse dëshironi ta fshini plotësisht, përdorni .filter() në vend të .map()
+        const deletedAt = new Date();
+        const originalMessage = { ...messageToDelete }; // Ruaj kopje të mesazhit origjinal për rikthim
+        setMessages(prev => 
+            prev.map(msg => 
+                msg.id === messageId 
+                    ? { 
+                        ...msg, 
+                        isDeleted: true,
+                        deletedAt: deletedAt,
+                        content: 'This message was deleted'
+                    } 
+                    : msg
+            )
+        );
+
+        // Fshi menu-n e opsioneve
+        setShowMessageOptions(null);
+
+        // ============================================
+        // SEND DELETE VIA SOCKET
+        // ============================================
+        socket.emit('delete_message', {
+            messageId: messageId,
+        });
+
+        // ============================================
+        // HANDLE SOCKET RESPONSES
+        // ============================================
+        // Dëgjo për konfirmim të suksesit
+        let deleteTimeoutId: NodeJS.Timeout | null = null;
+        const handleMessageDeleted = (data: any) => {
+            // Pastro timeout nëse mesazhi u fshi me sukses
+            if (deleteTimeoutId) {
+                clearTimeout(deleteTimeoutId);
+                deleteTimeoutId = null;
+            }
+
+            // Mesazhi u fshi me sukses - përditëso me të dhënat e reja nga serveri
+            if (data.data && data.data.id === messageId) {
+                const deletedMessage: Message = {
+                    id: data.data.id,
+                    senderId: data.data.senderId === user?.id ? 'current' : data.data.senderId,
+                    receiverId: data.data.receiverId === user?.id ? 'current' : data.data.receiverId,
+                    content: data.data.content || 'This message was deleted',
+                    timestamp: new Date(data.data.timestamp),
+                    isRead: data.data.isRead,
+                    isDeleted: data.data.isDeleted || true,
+                    deletedAt: data.data.deletedAt ? new Date(data.data.deletedAt) : deletedAt,
+                };
+
+                // Përditëso mesazhin me të dhënat e reja
+                // IMPORTANT: Përdorim .map() për të ruajtur pozicionin e mesazhit në listë
+                // Mesazhi shfaqet si i fshirë në të njëjtin pozicion (nuk hiqet nga lista)
+                setMessages(prev => 
+                    prev.map(msg => msg.id === messageId ? deletedMessage : msg)
+                );
+            }
+
+            // Hiq listener pasi mesazhi u fshi me sukses
+            socket.off('message_deleted', handleMessageDeleted);
+            socket.off('message_delete_error', handleDeleteError);
+        };
+
+        // Dëgjo për gabime
+        const handleDeleteError = (error: any) => {
+            // Pastro timeout nëse kemi gabim
+            if (deleteTimeoutId) {
+                clearTimeout(deleteTimeoutId);
+                deleteTimeoutId = null;
+            }
+
+            // ============================================
+            // ROLLBACK OPTIMISTIC UPDATE
+            // ============================================
+            // Fshirja dështoi - rikthe mesazhin origjinal
+            setMessages(prev => 
+                prev.map(msg => 
+                    msg.id === messageId 
+                        ? { 
+                            ...msg, 
+                            content: originalMessage.content,
+                            isDeleted: originalMessage.isDeleted || false,
+                            deletedAt: originalMessage.deletedAt
+                        } 
+                        : msg
+                )
+            );
+            setErrorMessage(error.message || 'Failed to delete message. Please try again.');
+            setTimeout(() => setErrorMessage(null), 5000);
+
+            // Hiq listeners
+            socket.off('message_deleted', handleMessageDeleted);
+            socket.off('message_delete_error', handleDeleteError);
+        };
+
+        // Regjistro listeners
+        socket.once('message_deleted', handleMessageDeleted);
+        socket.once('message_delete_error', handleDeleteError);
+
+        // ============================================
+        // TIMEOUT FALLBACK
+        // ============================================
+        // Nëse nuk marrim përgjigje brenda 10 sekondave, rikthe mesazhin origjinal
+        deleteTimeoutId = setTimeout(() => {
+            // Kontrollo nëse mesazhi ende ka optimistic update (nuk u konfirmua)
+            setMessages(prev => {
+                const message = prev.find(msg => msg.id === messageId);
+                if (message && message.isDeleted) {
+                    // Nuk morëm përgjigje - rikthe mesazhin origjinal
+                    setErrorMessage('Message delete timeout. Please check your connection and try again.');
+                    setTimeout(() => setErrorMessage(null), 5000);
+                    return prev.map(msg => 
+                        msg.id === messageId 
+                            ? { 
+                                ...msg, 
+                                content: originalMessage.content,
+                                isDeleted: originalMessage.isDeleted || false,
+                                deletedAt: originalMessage.deletedAt
+                            } 
+                            : msg
+                    );
+                }
+                return prev;
+            });
+
+            // Hiq listeners nëse ende janë aktiv
+            socket.off('message_deleted', handleMessageDeleted);
+            socket.off('message_delete_error', handleDeleteError);
+        }, 10000);
+    };
+
     return {
         friends,
         selectedFriend,
@@ -1160,6 +1854,15 @@ export function useDashboard() {
         messagesEndRef,
         loadMoreMessages,
         chatContainerRef,
+        // Message edit and options state
+        editingMessageId,
+        setEditingMessageId,
+        editMessageContent,
+        setEditMessageContent,
+        hoveredMessageId,
+        setHoveredMessageId,
+        showMessageOptions,
+        setShowMessageOptions,
         handleSendMessage,
         handleAddFriend,
         handleAcceptFriendRequest,
@@ -1171,7 +1874,13 @@ export function useDashboard() {
         handleDeleteChat,
         handleBlockUser,
         confirmBlockUser,
-        cancelBlockUser
+        cancelBlockUser,
+        // Message edit functions
+        handleStartEdit,
+        handleSaveEdit,
+        handleCancelEdit,
+        // Message delete function
+        handleDeleteMessage
     };
 }
 

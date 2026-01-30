@@ -636,10 +636,32 @@
     margin: 0;
 }
 
+.friend-badges {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
 .online-badge {
     font-size: 11px;
     color: var(--whatsappgreen);
     font-weight: 600;
+}
+
+.unread-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    background-color: var(--whatsappgreen);
+    color: white;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
 }
 
 /* Main Chat Area */
@@ -838,6 +860,28 @@
     display: flex;
     max-width: 70%;
     animation: messageSlide 0.3s ease-out;
+    position: relative;
+    align-items: flex-start;
+    gap: 8px;
+}
+
+/* Show 3 dots on hover for own messages */
+.message.own-message:hover .message-options-wrapper {
+    opacity: 1;
+    visibility: visible;
+}
+
+.message.own-message .message-options-wrapper {
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s ease, visibility 0.2s ease;
+}
+
+/* Keep visible when menu is open or when hovering over wrapper */
+.message.own-message .message-options-wrapper:hover,
+.message.own-message .message-options-wrapper:has(.message-options-menu) {
+    opacity: 1;
+    visibility: visible;
 }
 
 @keyframes messageSlide {
@@ -863,6 +907,7 @@
     padding: 10px 14px;
     border-radius: 12px;
     position: relative;
+    z-index: 1;
 }
 
 .own-message .message-content {
@@ -887,9 +932,229 @@
 .message-time {
     font-size: 11px;
     opacity: 0.7;
-    display: block;
-    text-align: right;
+    display: inline-block;
 }
+
+.message-footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+    margin-top: 4px;
+}
+
+/* Message Options (3 dots) */
+.message-options-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    order: -1; /* Position on the left side for own messages */
+    z-index: 10;
+}
+
+.message-options-button {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: none;
+    background-color: transparent;
+    color: #666;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    padding: 0;
+}
+
+.message-options-button:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+    color: #333;
+}
+
+.message-options-button svg {
+    width: 18px;
+    height: 18px;
+}
+
+/* Message Options Menu */
+.message-options-menu {
+    position: absolute;
+    top: calc(100% + 8px);
+    left: -20px;
+    margin-right: 20px;
+    background-color: var(--white);
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    min-width: 150px;
+    max-width: 180px;
+    z-index: 1000;
+    overflow: hidden;
+    animation: popupSlide 0.2s ease-out;
+}
+
+.message-option-item {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+    color: var(--black);
+    font-size: 14px;
+    text-align: left;
+}
+
+.message-option-item:hover {
+    background-color: var(--softbackground);
+}
+
+.message-option-item.message-option-delete:hover {
+    background-color: #fee;
+    color: #d32f2f;
+}
+
+.message-option-item svg {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+}
+
+.message-option-item span {
+    flex: 1;
+}
+
+/* Message Edit Mode */
+.message-edit-container {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+}
+
+.message-edit-input {
+    width: 100%;
+    padding: 8px 12px;
+    border: 2px solid var(--whatsappgreen);
+    border-radius: 8px;
+    font-size: 14px;
+    font-family: inherit;
+    outline: none;
+    background-color: var(--white);
+    color: var(--black);
+}
+
+.message-edit-input:focus {
+    border-color: var(--darkgreen);
+    box-shadow: 0 0 0 3px rgba(37, 211, 102, 0.1);
+}
+
+.message-edit-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    justify-content: flex-end;
+}
+
+.message-edit-save,
+.message-edit-cancel {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    padding: 0;
+}
+
+.message-edit-save {
+    background-color: var(--whatsappgreen);
+    color: var(--white);
+}
+
+.message-edit-save:hover {
+    background-color: var(--darkgreen);
+    transform: scale(1.1);
+}
+
+.message-edit-cancel {
+    background-color: #e0e0e0;
+    color: var(--black);
+}
+
+.message-edit-cancel:hover {
+    background-color: #d0d0d0;
+    transform: scale(1.1);
+}
+
+.message-edit-save svg,
+.message-edit-cancel svg {
+    width: 16px;
+    height: 16px;
+}
+
+/* Message Edited Indicator */
+.message-edited-indicator {
+    font-size: 11px;
+    opacity: 0.6;
+    font-style: italic;
+    color: #999;
+    display: inline-block;
+}
+
+.own-message .message-content .message-edited-indicator {
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.friend-message .message-content .message-edited-indicator {
+    color: #999;
+}
+
+/* Deleted Message */
+.message-deleted-text {
+    margin: 0 0 4px 0;
+    font-size: 13px;
+    line-height: 1.4;
+    word-wrap: break-word;
+    font-style: italic;
+    color: white;
+    user-select: none;
+    pointer-events: none;
+}
+
+.own-message .message-content .message-deleted-text {
+    color: white;
+}
+
+.friend-message .message-content .message-deleted-text {
+    color: white;
+}
+
+/* Deleted Message Container */
+.message.is-deleted,
+.message-deleted {
+    opacity: 1;
+}
+
+.message.is-deleted .message-content,
+.message-deleted .message-content {
+    opacity: 1;
+}
+
+/* Optional: If you want to completely hide deleted messages, uncomment this: */
+/*
+.messages-container .message.is-deleted {
+    display: none;
+}
+*/
 
 /* Message Input */
 .message-input-form {

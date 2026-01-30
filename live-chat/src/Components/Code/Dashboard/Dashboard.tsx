@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 
 export function Dashboard() {
     const navigate = useNavigate();
+    const messageOptionsRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
     const {
         friends,
         selectedFriend,
@@ -49,7 +50,22 @@ export function Dashboard() {
         handleDeleteChat,
         handleBlockUser,
         confirmBlockUser,
-        cancelBlockUser
+        cancelBlockUser,
+        // Message edit and options state
+        editingMessageId,
+        setEditingMessageId,
+        editMessageContent,
+        setEditMessageContent,
+        hoveredMessageId,
+        setHoveredMessageId,
+        showMessageOptions,
+        setShowMessageOptions,
+        // Message edit functions
+        handleStartEdit,
+        handleSaveEdit,
+        handleCancelEdit,
+        // Message delete function
+        handleDeleteMessage
     } = useDashboard();
 
     const moreOptionsRef = useRef<HTMLDivElement>(null);
@@ -60,16 +76,23 @@ export function Dashboard() {
             if (moreOptionsRef.current && !moreOptionsRef.current.contains(event.target as Node)) {
                 setShowMoreOptions(false);
             }
+            // Check if click is outside any message options menu
+            if (showMessageOptions) {
+                const currentRef = messageOptionsRefs.current[showMessageOptions];
+                if (currentRef && !currentRef.contains(event.target as Node)) {
+                    setShowMessageOptions(null);
+                }
+            }
         };
 
-        if (showMoreOptions) {
+        if (showMoreOptions || showMessageOptions) {
             document.addEventListener('mousedown', handleClickOutside);
         }
 
         return () => {
             document.removeEventListener('mousedown', handleClickOutside);
         };
-    }, [showMoreOptions, setShowMoreOptions]);
+    }, [showMoreOptions, setShowMoreOptions, showMessageOptions, setShowMessageOptions]);
 
     return (
         <div className="dashboard-container">
@@ -317,9 +340,16 @@ export function Dashboard() {
                                         <p className="friend-name">{friend.name}</p>
                                         <p className="friend-username">@{friend.username}</p>
                                     </div>
-                                    {friend.isOnline && (
-                                        <span className="online-badge">Online</span>
-                                    )}
+                                    <div className="friend-badges">
+                                        {friend.isOnline && (
+                                            <span className="online-badge">Online</span>
+                                        )}
+                                        {friend.unreadCount && friend.unreadCount > 0 && (
+                                            <span className="unread-badge">
+                                                {friend.unreadCount >= 5 ? '4+' : friend.unreadCount}
+                                            </span>
+                                        )}
+                                    </div>
                                 </div>
                             ))}
                         </div>
@@ -456,19 +486,164 @@ export function Dashboard() {
                                     ) : (
                                         messages.map(message => {
                                             const isOwnMessage = message.senderId === 'current';
+                                            const isHovered = hoveredMessageId === message.id;
+                                            const showOptions = showMessageOptions === message.id;
+                                            
                                             return (
                                                 <div
                                                     key={message.id}
-                                                    className={`message ${isOwnMessage ? 'own-message' : 'friend-message'}`}
+                                                    className={`message ${isOwnMessage ? 'own-message' : 'friend-message'} ${message.isDeleted ? 'is-deleted' : ''}`}
+                                                    onMouseEnter={() => {
+                                                        if (isOwnMessage && !message.isDeleted) {
+                                                            setHoveredMessageId(message.id);
+                                                        }
+                                                    }}
+                                                    onMouseLeave={() => {
+                                                        setHoveredMessageId(null);
+                                                    }}
                                                 >
+                                                    {/* Message Options Button (3 dots) - Only for own messages and not deleted */}
+                                                    {isOwnMessage && !message.isDeleted && (
+                                                        <div 
+                                                            className="message-options-wrapper" 
+                                                            ref={(el) => {
+                                                                if (el) {
+                                                                    messageOptionsRefs.current[message.id] = el;
+                                                                } else {
+                                                                    delete messageOptionsRefs.current[message.id];
+                                                                }
+                                                            }}
+                                                        >
+                                                            <button
+                                                                className="message-options-button"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setShowMessageOptions(showOptions ? null : message.id);
+                                                                }}
+                                                                title="Message options"
+                                                            >
+                                                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                                    <circle cx="12" cy="12" r="1"></circle>
+                                                                    <circle cx="12" cy="5" r="1"></circle>
+                                                                    <circle cx="12" cy="19" r="1"></circle>
+                                                                </svg>
+                                                            </button>
+                                                            
+                                                            {/* Message Options Menu */}
+                                                            {showOptions && (
+                                                                <div className="message-options-menu">
+                                                                    <button
+                                                                        className="message-option-item"
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            handleStartEdit(message.id);
+                                                                        }}
+                                                                    >
+                                                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                                                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                                                        </svg>
+                                                                        <span>Edit</span>
+                                                                    </button>
+                                                                    <button
+                                                                        className="message-option-item message-option-delete"
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            handleDeleteMessage(message.id);
+                                                                        }}
+                                                                    >
+                                                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                                            <polyline points="3 6 5 6 21 6"></polyline>
+                                                                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                                                        </svg>
+                                                                        <span>Unsend</span>
+                                                                    </button>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                    
                                                     <div className="message-content">
-                                                        <p>{message.content}</p>
-                                                        <span className="message-time">
-                                                            {new Date(message.timestamp).toLocaleTimeString([], {
-                                                                hour: '2-digit',
-                                                                minute: '2-digit'
-                                                            })}
-                                                        </span>
+                                                        {editingMessageId === message.id ? (
+                                                            // Edit Mode
+                                                            <div className="message-edit-container">
+                                                                <input
+                                                                    type="text"
+                                                                    className="message-edit-input"
+                                                                    value={editMessageContent}
+                                                                    onChange={(e) => setEditMessageContent(e.target.value)}
+                                                                    onKeyDown={(e) => {
+                                                                        if (e.key === 'Enter' && !e.shiftKey) {
+                                                                            e.preventDefault();
+                                                                            handleSaveEdit(message.id);
+                                                                        } else if (e.key === 'Escape') {
+                                                                            e.preventDefault();
+                                                                            handleCancelEdit();
+                                                                        }
+                                                                    }}
+                                                                    autoFocus
+                                                                />
+                                                                <div className="message-edit-actions">
+                                                                    <button
+                                                                        className="message-edit-save"
+                                                                        onClick={() => handleSaveEdit(message.id)}
+                                                                        title="Save (Enter)"
+                                                                    >
+                                                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                                            <polyline points="20 6 9 17 4 12"></polyline>
+                                                                        </svg>
+                                                                    </button>
+                                                                    <button
+                                                                        className="message-edit-cancel"
+                                                                        onClick={handleCancelEdit}
+                                                                        title="Cancel (Esc)"
+                                                                    >
+                                                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                                                                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                                                                        </svg>
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        ) : (
+                                                            // Normal Mode
+                                                            <>
+                                                                {message.isDeleted ? (
+                                                                    // Deleted Message
+                                                                    <>
+                                                                        <p className="message-deleted-text">
+                                                                            Message was deleted
+                                                                        </p>
+                                                                        <div className="message-footer">
+                                                                            <span className="message-time">
+                                                                                {new Date(message.timestamp).toLocaleTimeString([], {
+                                                                                    hour: '2-digit',
+                                                                                    minute: '2-digit'
+                                                                                })}
+                                                                            </span>
+                                                                        </div>
+                                                                    </>
+                                                                ) : (
+                                                                    // Normal Message
+                                                                    <>
+                                                                        <p>{message.content}</p>
+                                                                        <div className="message-footer">
+                                                                            <span className="message-time">
+                                                                                {new Date(message.timestamp).toLocaleTimeString([], {
+                                                                                    hour: '2-digit',
+                                                                                    minute: '2-digit'
+                                                                                })}
+                                                                            </span>
+                                                                            {message.isEdited && (
+                                                                                <span className="message-edited-indicator">
+                                                                                    Message was edited
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
+                                                                    </>
+                                                                )}
+                                                            </>
+                                                        )}
                                                     </div>
                                                 </div>
                                             );

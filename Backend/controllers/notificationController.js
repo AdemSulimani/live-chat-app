@@ -94,9 +94,49 @@ const markAllNotificationsAsRead = async (req, res) => {
   }
 };
 
+// @desc    Mark message notifications from a specific user as read
+// @route   PUT /api/notifications/read-by-user/:userId
+// @access  Private
+const markNotificationsByUserAsRead = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    if (!userId) {
+      return res.status(400).json({ message: 'User ID is required' });
+    }
+
+    // Verify user exists
+    if (!req.user || !req.user._id) {
+      return res.status(401).json({ message: 'User not authenticated' });
+    }
+
+    // Mark all message notifications from this user as read
+    const result = await Notification.updateMany(
+      {
+        userId: req.user._id,
+        type: 'message',
+        relatedUserId: userId,
+        isRead: false,
+      },
+      {
+        isRead: true,
+      }
+    );
+
+    return res.status(200).json({
+      message: 'Notifications marked as read',
+      count: result.modifiedCount,
+    });
+  } catch (error) {
+    console.error('Mark notifications by user as read error:', error);
+    return res.status(500).json({ message: 'Server error' });
+  }
+};
+
 module.exports = {
   getNotifications,
   markNotificationAsRead,
   markAllNotificationsAsRead,
+  markNotificationsByUserAsRead,
 };
 

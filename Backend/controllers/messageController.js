@@ -1,5 +1,7 @@
 const Message = require('../models/Message');
 const User = require('../models/User');
+const Notification = require('../models/Notification');
+const { isUserInChatWith } = require('../socket/socketServer');
 
 // ============================================
 // SANITIZATION HELPER FUNCTION
@@ -202,6 +204,35 @@ const sendMessage = async (req, res) => {
       timestamp: savedMessage.createdAt,
       isRead: savedMessage.isRead,
     };
+
+    // ============================================
+    // CREATE NOTIFICATION FOR RECEIVER
+    // ============================================
+    // Krijo njoftim për marrësin që ka marrë mesazh
+    // VËREJTJE: Mos krijo njoftim nëse marrësi është tashmë në chat me dërguesin
+    try {
+      // Kontrollo nëse marrësi është në chat me dërguesin
+      const isReceiverInChatWithSender = isUserInChatWith(receiverId, senderId);
+
+      // Nëse marrësi është në chat me dërguesin, mos krijo njoftim
+      if (isReceiverInChatWithSender) {
+        // Përdoruesi është në chat, mos krijo njoftim
+        return;
+      }
+
+      const senderName = savedMessage.senderId.displayName || savedMessage.senderId.name || 'Someone';
+      const notification = new Notification({
+        userId: receiverId,
+        type: 'message',
+        message: `${senderName} sent you a message`,
+        isRead: false,
+        relatedUserId: senderId,
+      });
+      await notification.save();
+    } catch (notificationError) {
+      console.error('Error creating notification:', notificationError);
+      // Nuk ndalojmë procesin nëse njoftimi dështon
+    }
 
     return res.status(201).json({
       message: 'Message sent successfully',

@@ -3,6 +3,7 @@ const {
   getNotifications,
   markNotificationAsRead,
   markAllNotificationsAsRead,
+  markNotificationsByUserAsRead,
 } = require('../controllers/notificationController');
 const { protect } = require('../middleware/authMiddleware');
 
@@ -19,6 +20,9 @@ router.put('/:notificationId/read', markNotificationAsRead);
 
 // Mark all notifications as read
 router.put('/read-all', markAllNotificationsAsRead);
+
+// Mark message notifications from a specific user as read
+router.put('/read-by-user/:userId', markNotificationsByUserAsRead);
 
 module.exports = router;
 
