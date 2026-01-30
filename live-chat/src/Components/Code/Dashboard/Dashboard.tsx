@@ -39,6 +39,7 @@ export function Dashboard() {
         setErrorMessage,
         setSuccessMessage,
         messagesEndRef,
+        chatContainerRef,
         handleSendMessage,
         handleAddFriend,
         handleAcceptFriendRequest,
@@ -452,7 +453,7 @@ export function Dashboard() {
                         </div>
 
                         {/* Messages Container */}
-                        <div className="messages-container" ref={messagesEndRef}>
+                        <div className="messages-container" ref={chatContainerRef}>
                             {loadingMessages ? (
                                 <div className="messages-loading">
                                     <div className="loading-spinner"></div>
