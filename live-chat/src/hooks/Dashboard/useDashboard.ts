@@ -85,6 +85,7 @@ export function useDashboard() {
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const chatContainerRef = useRef<HTMLDivElement>(null);
+    const isInitialLoadRef = useRef<boolean>(false);
 
     const { user, getToken } = useUser();
     const { socket, isConnected } = useSocket();
@@ -109,20 +110,46 @@ export function useDashboard() {
     };
 
     // ============================================
+    // HELPER: CHECK IF USER IS AT BOTTOM OF CHAT
+    // ============================================
+    // Kontrollo nëse useri është në fund të chat-it (ose shumë afër fundit)
+    // Kjo përdoret për të vendosur nëse duhet të scroll-ojmë automatikisht
+    const isUserAtBottom = (): boolean => {
+        if (!chatContainerRef.current) return false;
+        const container = chatContainerRef.current;
+        const threshold = 100; // 100px nga fundi - nëse është brenda kësaj distance, konsiderohet "në fund"
+        return container.scrollHeight - container.scrollTop - container.clientHeight <= threshold;
+    };
+
+    // ============================================
     // SCROLL AUTOMATIC TO BOTTOM
     // ============================================
     // Scroll automatik te mesazhi i fundit kur:
-    // - Mesazhet e reja shtohen (real-time)
-    // - Mesazhet ngarkohen nga API
+    // - Mesazhet e reja shtohen (real-time) - VETËM nëse useri është në fund
+    // - Mesazhet ngarkohen nga API - gjithmonë scroll (kur hapet chat i ri)
     // - Komponenti mount-ohet
+    // 
+    // IMPORTANT: Kur mesazh i ri vjen nga shoku, scroll-ojmë VETËM nëse useri është tashmë në fund
+    // Nëse useri ka scrolluar lart, mos scroll-ojmë (le të shohë badge/notification)
     useEffect(() => {
-        if (messagesEndRef.current && messages.length > 0) {
+        if (chatContainerRef.current && messages.length > 0) {
             // Përdor setTimeout për të garantuar që DOM është përditësuar
             setTimeout(() => {
-        if (messagesEndRef.current) {
-            messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+                if (chatContainerRef.current) {
+                    // Nëse është ngarkim fillestar (kur hapet chat i ri), gjithmonë scroll-ojmë në fund
+                    // Nëse është mesazh i ri real-time, scroll-ojmë vetëm nëse useri është në fund
+                    if (isInitialLoadRef.current) {
+                        // Ngarkim fillestar - gjithmonë scroll në fund
+                        chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+                        isInitialLoadRef.current = false; // Reset flag pas scroll
+                    } else {
+                        // Mesazh i ri real-time - scroll vetëm nëse useri është në fund
+                        if (isUserAtBottom()) {
+                            chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+                        }
+                    }
                 }
-            }, 100);
+            }, 50);
         }
     }, [messages]);
 
@@ -358,6 +385,29 @@ export function useDashboard() {
                 // Kjo garanton që typing indicator fshihet kur mesazhi merret
                 if (senderId === selectedFriend.id) {
                     setIsTyping(false);
+                }
+
+                // ============================================
+                // HANDLE UNREAD COUNT FOR RECEIVED MESSAGES
+                // ============================================
+                // Nëse mesazhi vjen nga shoku (jo nga useri aktual) dhe useri ka scrolluar lart,
+                // rrit unreadCount për të treguar që ka mesazh të ri
+                if (senderId !== user?.id && senderId === selectedFriend.id) {
+                    // Kontrollo nëse useri është në fund të chat-it
+                    // Nëse nuk është në fund, rrit unreadCount
+                    setTimeout(() => {
+                        if (!isUserAtBottom()) {
+                            setFriends(prev => prev.map(friend => {
+                                if (friend.id === senderId) {
+                                    return {
+                                        ...friend,
+                                        unreadCount: (friend.unreadCount || 0) + 1,
+                                    };
+                                }
+                                return friend;
+                            }));
+                        }
+                    }, 100); // Përdor timeout për të lejuar që DOM të përditësohet dhe scroll pozicioni të llogaritet
                 }
             } else if (senderId !== user?.id) {
                 // Mesazhi vjen nga një shok tjetër (jo i zgjedhur aktualisht)
@@ -662,9 +712,81 @@ export function useDashboard() {
     }, [socket, selectedFriend, getToken]);
 
     // ============================================
+    // MARK MESSAGES AS READ WHEN USER SCROLLS TO BOTTOM
+    // ============================================
+    // Kur useri scroll-on në fund manualisht dhe sheh mesazhet e reja,
+    // shënoji si të lexuara dhe hiq unreadCount
+    useEffect(() => {
+        if (!socket || !selectedFriend || !chatContainerRef.current) {
+            return;
+        }
+
+        const container = chatContainerRef.current;
+        let scrollTimeout: NodeJS.Timeout | null = null;
+        
+        const handleScroll = () => {
+            // Përdor debounce për të shmangur kontrollime të shumta
+            if (scrollTimeout) {
+                clearTimeout(scrollTimeout);
+            }
+            
+            scrollTimeout = setTimeout(() => {
+                // Kontrollo nëse useri është në fund (ose shumë afër fundit)
+                if (isUserAtBottom()) {
+                    // Gjej mesazhet e palexuara nga shoku i zgjedhur
+                    const unreadMessages = messages.filter(
+                        msg => msg.senderId === selectedFriend.id && !msg.isRead
+                    );
+
+                    // Nëse ka mesazhe të palexuara, shënoji si të lexuara
+                    if (unreadMessages.length > 0) {
+                        // Dërgo message_received për çdo mesazh të palexuar
+                        unreadMessages.forEach(msg => {
+                            socket.emit('message_received', { messageId: msg.id });
+                        });
+
+                        // Përditëso statusin e mesazheve në state
+                        setMessages(prev => prev.map(msg => 
+                            unreadMessages.some(unread => unread.id === msg.id)
+                                ? { ...msg, isRead: true }
+                                : msg
+                        ));
+
+                        // Rivendos numrin e mesazheve të palexuara për shokun e zgjedhur
+                        setFriends(prev => prev.map(friend => {
+                            if (friend.id === selectedFriend.id) {
+                                return {
+                                    ...friend,
+                                    unreadCount: 0,
+                                };
+                            }
+                            return friend;
+                        }));
+                    }
+                }
+            }, 150); // Debounce 150ms
+        };
+
+        // Shto event listener për scroll
+        container.addEventListener('scroll', handleScroll);
+        
+        // Kontrollo edhe menjëherë nëse useri është tashmë në fund
+        handleScroll();
+
+        // Cleanup
+        return () => {
+            if (scrollTimeout) {
+                clearTimeout(scrollTimeout);
+            }
+            container.removeEventListener('scroll', handleScroll);
+        };
+    }, [socket, selectedFriend, messages]);
+
+    // ============================================
     // MARK MESSAGES AS READ
     // ============================================
     // Dërgo message_received kur mesazhet shfaqen (për të shënuar si të lexuara)
+    // Kjo është për rastet kur mesazhet tashmë janë të lexuara kur hapet chat
     useEffect(() => {
         if (!socket || !selectedFriend || messages.length === 0) {
             return;
@@ -676,12 +798,14 @@ export function useDashboard() {
         );
 
         // Dërgo message_received për çdo mesazh të palexuar
-        unreadMessages.forEach(msg => {
-            socket.emit('message_received', { messageId: msg.id });
-        });
+        // VËREJTJE: Kjo do të funksionojë vetëm nëse useri është në fund
+        // Për scroll manual, shih useEffect më lart
+        if (unreadMessages.length > 0 && isUserAtBottom()) {
+            unreadMessages.forEach(msg => {
+                socket.emit('message_received', { messageId: msg.id });
+            });
 
-        // Rivendos numrin e mesazheve të palexuara për shokun e zgjedhur
-        if (unreadMessages.length > 0) {
+            // Rivendos numrin e mesazheve të palexuara për shokun e zgjedhur
             setFriends(prev => prev.map(friend => {
                 if (friend.id === selectedFriend.id) {
                     return {
@@ -709,6 +833,7 @@ export function useDashboard() {
             if (!selectedFriend) {
                 setMessages([]);
                 setIsTyping(false); // Hiq typing indicator kur nuk ka shok të zgjedhur
+                isInitialLoadRef.current = false; // Reset flag
                 // Show sidebar on mobile when no friend is selected
                 if (window.innerWidth <= 768) {
                     setShowSidebar(true);
@@ -718,6 +843,8 @@ export function useDashboard() {
             
             // Hiq typing indicator kur ndryshon shoku i zgjedhur
             setIsTyping(false);
+            // Reset flag kur ndryshon shoku - do të vendoset në true kur mesazhet ngarkohen
+            isInitialLoadRef.current = false;
 
             const token = getToken();
             if (!token || !user) {
@@ -766,6 +893,9 @@ export function useDashboard() {
                     // Ruaj mesazhet në state - do të shfaqen automatikisht në UI
                     // Këto janë mesazhet e ruajtura nga databaza (përfshirë pas refresh)
                     setMessages(formattedMessages);
+                    
+                    // Shëno që është ngarkim fillestar - scroll-ojmë gjithmonë në fund
+                    isInitialLoadRef.current = true;
                     
                     // ============================================
                     // REQUEST TYPING STATUS WHEN ENTERING CHAT
@@ -944,6 +1074,13 @@ export function useDashboard() {
         
         setMessages(prev => [...prev, optimisticMessage]);
         setMessageInput(''); // Pastro input menjëherë
+        
+        // Scroll menjëherë në fund pas shtimit të mesazhit optimistik
+        setTimeout(() => {
+            if (chatContainerRef.current) {
+                chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+            }
+        }, 10);
 
         // ============================================
         // STOP TYPING INDICATOR WHEN MESSAGE IS SENT
