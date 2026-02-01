@@ -89,6 +89,9 @@ const userSchema = new mongoose.Schema(
     lastSeenEnabled: {
       type: Boolean,
       default: true, // Default: last seen is enabled
+      // Për përdoruesit ekzistues që nuk kanë këtë fushë:
+      // - Në kod trajtohet si true (përdoret !== false)
+      // - Pre-save hook vendos true nëse nuk ekziston
     },
     lastSeenAt: {
       type: Date,
@@ -99,6 +102,21 @@ const userSchema = new mongoose.Schema(
     timestamps: true, // createdAt, updatedAt
   }
 );
+
+// ============================================
+// PRE-SAVE HOOK: Ensure lastSeenEnabled default
+// ============================================
+// Sigurohem që për përdoruesit ekzistues që nuk kanë lastSeenEnabled, vendoset true
+// Kjo garanton që kur një përdorues ekzistues bën update, lastSeenEnabled do të jetë true
+// nëse nuk ekziston në dokument
+// Për përdoruesit që lexohen pa u ruajtur, në kod trajtohet si true (përdoret !== false)
+userSchema.pre('save', function(next) {
+  // Nëse lastSeenEnabled nuk është i definuar ose është null, vendos default: true
+  if (this.lastSeenEnabled === undefined || this.lastSeenEnabled === null) {
+    this.lastSeenEnabled = true;
+  }
+  next();
+});
 
 // Hash password-it para se të ruhet në databazë
 userSchema.pre('save', async function () {

@@ -158,15 +158,20 @@ const getUserLastSeen = async (req, res) => {
       return res.status(403).json({ message: 'You can only view last seen for your friends' });
     }
 
-    // Privacy check: last seen shfaqet vetëm nëse:
+    // ============================================
+    // PRIVACY CHECK: Last Seen
+    // ============================================
+    // Last seen shfaqet vetëm nëse:
     // 1. Target user ka lastSeenEnabled = true
     // 2. Current user ka lastSeenEnabled = true (reciprocitet)
-    const showLastSeen = targetUser.lastSeenEnabled !== false && 
-                        currentUser.lastSeenEnabled !== false;
+    // Nëse njëri e ka disable, asnjëri nuk shikon last seen të tjetrit
+    const targetUserLastSeenEnabled = targetUser.lastSeenEnabled !== false; // Default: true
+    const currentUserLastSeenEnabled = currentUser.lastSeenEnabled !== false; // Default: true
+    const showLastSeen = targetUserLastSeenEnabled && currentUserLastSeenEnabled;
 
     return res.status(200).json({
       message: 'Last seen retrieved successfully',
-      lastSeenEnabled: targetUser.lastSeenEnabled !== false,
+      lastSeenEnabled: targetUserLastSeenEnabled,
       lastSeenAt: showLastSeen && targetUser.lastSeenAt ? targetUser.lastSeenAt : null,
     });
   } catch (error) {

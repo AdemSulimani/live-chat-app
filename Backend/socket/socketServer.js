@@ -472,8 +472,8 @@ const initializeSocket = (server) => {
           return; // Not authorized
         }
 
-        // Get receiver user to update lastSeenAt
-        const receiver = await User.findById(userId);
+        // Get receiver user to update lastSeenAt - include lastSeenEnabled
+        const receiver = await User.findById(userId).select('lastSeenEnabled');
         if (!receiver) {
           return;
         }
@@ -489,32 +489,82 @@ const initializeSocket = (server) => {
         receiver.lastSeenAt = readAt;
         await receiver.save();
         
+        // ============================================
+        // PRIVACY CHECK: Last Seen Updated Event
+        // ============================================
         // Dërgo last_seen_updated event te miqtë që janë online
-        // Kjo lejon që miqtë të shohin përditësimin e last seen në real-time
-        const userWithFriends = await User.findById(receiver._id).select('friends');
+        // Por vetëm nëse:
+        // 1. Receiver ka lastSeenEnabled = true
+        // 2. Friend ka lastSeenEnabled = true (reciprocitet)
+        // Nëse njëri e ka disable, mos dërgo event-in
+        const receiverLastSeenEnabled = receiver.lastSeenEnabled !== false; // Default: true
         
-        if (userWithFriends && userWithFriends.friends) {
-          userWithFriends.friends.forEach((friendId) => {
-            const friendIdStr = friendId.toString();
-            // Dërgo vetëm nëse friend-i është online
-            if (activeUsers.has(friendIdStr)) {
-              io.to(`user:${friendIdStr}`).emit('last_seen_updated', {
-                userId: userId,
+        if (receiverLastSeenEnabled) {
+          const userWithFriends = await User.findById(receiver._id).select('friends');
+          
+          if (userWithFriends && userWithFriends.friends) {
+            // Get all friends with their lastSeenEnabled setting
+            const friendsData = await User.find({
+              _id: { $in: userWithFriends.friends }
+            }).select('_id lastSeenEnabled');
+            
+            // Create a map for quick lookup
+            const friendsLastSeenMap = new Map();
+            friendsData.forEach(friend => {
+              friendsLastSeenMap.set(friend._id.toString(), friend.lastSeenEnabled !== false);
+            });
+            
+            userWithFriends.friends.forEach((friendId) => {
+              const friendIdStr = friendId.toString();
+              const friendLastSeenEnabled = friendsLastSeenMap.get(friendIdStr) !== false; // Default: true
+              
+              // Dërgo vetëm nëse:
+              // 1. Friend-i është online
+              // 2. Receiver ka lastSeenEnabled = true (tashmë kontrolluar)
+              // 3. Friend ka lastSeenEnabled = true (reciprocitet)
+              if (activeUsers.has(friendIdStr) && friendLastSeenEnabled) {
+                io.to(`user:${friendIdStr}`).emit('last_seen_updated', {
+                  userId: userId,
+                  lastSeenAt: receiver.lastSeenAt,
+                });
+              }
+            });
+          }
+        }
+
+        // ============================================
+        // PRIVACY CHECK: Message Seen Event (Read Receipts)
+        // ============================================
+        // Notify sender that message was read (seen)
+        // IMPORTANT: Delivered status dërgohet gjithmonë (nuk ka privacy check)
+        // Por "seen" status dërgohet vetëm nëse:
+        // 1. Receiver (që lexoi mesazhin) ka lastSeenEnabled = true
+        // 2. Sender (që do ta marrë event-in) ka lastSeenEnabled = true (reciprocitet)
+        // Nëse njëri e ka disable, mos dërgo message_seen event-in
+        // Në këtë rast, sender do të shohë vetëm "delivered", jo "seen"
+        if (receiverLastSeenEnabled && activeUsers.has(message.senderId.toString())) {
+          // Get sender's lastSeenEnabled setting
+          const sender = await User.findById(message.senderId).select('lastSeenEnabled');
+          if (sender) {
+            const senderLastSeenEnabled = sender.lastSeenEnabled !== false; // Default: true
+            
+            // Dërgo message_seen vetëm nëse të dy kanë lastSeenEnabled = true
+            // Nëse njëri e ka disable, nuk dërgohet event-i
+            // Sender do të shohë vetëm "delivered" status, jo "seen"
+            if (senderLastSeenEnabled) {
+              io.to(`user:${message.senderId.toString()}`).emit('message_seen', {
+                messageId: messageId,
+                readBy: userId,
+                readAt: readAt,
                 lastSeenAt: receiver.lastSeenAt,
               });
             }
-          });
+            // Nëse senderLastSeenEnabled = false, nuk dërgohet message_seen
+            // Por delivered status është tashmë dërguar (në send_message handler)
+          }
         }
-
-        // Notify sender that message was read
-        if (activeUsers.has(message.senderId.toString())) {
-          io.to(`user:${message.senderId.toString()}`).emit('message_seen', {
-            messageId: messageId,
-            readBy: userId,
-            readAt: readAt,
-            lastSeenAt: receiver.lastSeenAt,
-          });
-        }
+        // Nëse receiverLastSeenEnabled = false, nuk dërgohet message_seen
+        // Por delivered status është tashmë dërguar (në send_message handler)
 
       } catch (error) {
         console.error('Message received confirmation error:', error);
