@@ -85,6 +85,15 @@ const userSchema = new mongoose.Schema(
       enum: ['online', 'offline', 'do_not_disturb'],
       default: 'offline',
     },
+    // Last seen settings
+    lastSeenEnabled: {
+      type: Boolean,
+      default: true, // Default: last seen is enabled
+    },
+    lastSeenAt: {
+      type: Date,
+      default: null, // Koha e fundit kur përdoruesi ka lexuar mesazhe
+    },
   },
   {
     timestamps: true, // createdAt, updatedAt

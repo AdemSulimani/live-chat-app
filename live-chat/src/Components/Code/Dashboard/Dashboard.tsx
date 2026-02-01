@@ -66,7 +66,11 @@ export function Dashboard() {
         handleSaveEdit,
         handleCancelEdit,
         // Message delete function
-        handleDeleteMessage
+        handleDeleteMessage,
+        // Message status helper
+        getMessageStatus,
+        // Last seen formatter
+        formatLastSeen
     } = useDashboard();
 
     const moreOptionsRef = useRef<HTMLDivElement>(null);
@@ -413,6 +417,20 @@ export function Dashboard() {
                                             const status = selectedFriend.displayedStatus || 'offline';
                                             if (status === 'online') return 'Online';
                                             if (status === 'do_not_disturb') return 'Do Not Disturb';
+                                            
+                                            // Nëse është offline, shfaq last seen nëse është e disponueshme
+                                            const lastSeenText = formatLastSeen(
+                                                selectedFriend.lastSeenAt,
+                                                selectedFriend.lastSeenEnabled,
+                                                currentUser.lastSeenEnabled
+                                            );
+                                            
+                                            // Nëse ka last seen text (përfshirë "Last seen unavailable"), shfaq atë
+                                            if (lastSeenText) {
+                                                return lastSeenText;
+                                            }
+                                            
+                                            // Nëse nuk ka last seen text (null), shfaq "Offline"
                                             return 'Offline';
                                         })()}
                                     </p>
@@ -511,6 +529,7 @@ export function Dashboard() {
                                             return (
                                                 <div
                                                     key={message.id}
+                                                    data-message-id={message.id}
                                                     className={`message ${isOwnMessage ? 'own-message' : 'friend-message'} ${message.isDeleted ? 'is-deleted' : ''}`}
                                                     onMouseEnter={() => {
                                                         if (isOwnMessage && !message.isDeleted) {
@@ -656,6 +675,12 @@ export function Dashboard() {
                                                                             {message.isEdited && (
                                                                                 <span className="message-edited-indicator">
                                                                                     Message was edited
+                                                                                </span>
+                                                                            )}
+                                                                            {/* Message Status (Delivered/Seen) - Updates real-time via Socket.IO events */}
+                                                                            {isOwnMessage && getMessageStatus(message, selectedFriend?.lastSeenEnabled, currentUser?.lastSeenEnabled) && (
+                                                                                <span className="message-status">
+                                                                                    {getMessageStatus(message, selectedFriend?.lastSeenEnabled, currentUser?.lastSeenEnabled)}
                                                                                 </span>
                                                                             )}
                                                                         </div>

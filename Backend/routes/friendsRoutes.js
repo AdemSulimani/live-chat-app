@@ -3,6 +3,7 @@ const {
   getFriends,
   removeFriend,
   getFriendStatus,
+  updateLastSeenEnabled,
 } = require('../controllers/friendsController');
 const { protect } = require('../middleware/authMiddleware');
 
@@ -19,6 +20,9 @@ router.get('/:friendId/status', getFriendStatus);
 
 // Remove a friend
 router.post('/remove/:friendId', removeFriend);
+
+// Update last seen enabled setting
+router.put('/last-seen', updateLastSeenEnabled);
 
 module.exports = router;
 

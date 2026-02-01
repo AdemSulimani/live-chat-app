@@ -86,8 +86,99 @@ const findUser = async (req, res) => {
   }
 };
 
+// @desc    Update last seen enabled setting
+// @route   PUT /api/users/settings/last-seen
+// @access  Private
+const updateLastSeenEnabled = async (req, res) => {
+  try {
+    const { lastSeenEnabled } = req.body;
+
+    // Verify current user exists
+    if (!req.user || !req.user._id) {
+      return res.status(401).json({ message: 'User not authenticated' });
+    }
+
+    // Validate input
+    if (typeof lastSeenEnabled !== 'boolean') {
+      return res.status(400).json({ message: 'lastSeenEnabled must be a boolean' });
+    }
+
+    // Update user's lastSeenEnabled setting
+    const user = await User.findByIdAndUpdate(
+      req.user._id,
+      { lastSeenEnabled: lastSeenEnabled },
+      { new: true }
+    ).select('lastSeenEnabled');
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    return res.status(200).json({
+      message: 'Last seen setting updated successfully',
+      lastSeenEnabled: user.lastSeenEnabled,
+    });
+  } catch (error) {
+    console.error('Update last seen enabled error:', error);
+    return res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// @desc    Get last seen for a user (respecting privacy)
+// @route   GET /api/users/:userId/last-seen
+// @access  Private
+const getUserLastSeen = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    if (!userId) {
+      return res.status(400).json({ message: 'User ID is required' });
+    }
+
+    // Verify current user exists
+    if (!req.user || !req.user._id) {
+      return res.status(401).json({ message: 'User not authenticated' });
+    }
+
+    const currentUserId = req.user._id.toString();
+
+    // Check if target user exists
+    const targetUser = await User.findById(userId).select('lastSeenEnabled lastSeenAt friends');
+    if (!targetUser) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Check if they are friends
+    const currentUser = await User.findById(currentUserId).select('lastSeenEnabled friends');
+    if (!currentUser) {
+      return res.status(404).json({ message: 'Current user not found' });
+    }
+
+    if (!currentUser.friends.includes(userId)) {
+      return res.status(403).json({ message: 'You can only view last seen for your friends' });
+    }
+
+    // Privacy check: last seen shfaqet vetëm nëse:
+    // 1. Target user ka lastSeenEnabled = true
+    // 2. Current user ka lastSeenEnabled = true (reciprocitet)
+    const showLastSeen = targetUser.lastSeenEnabled !== false && 
+                        currentUser.lastSeenEnabled !== false;
+
+    return res.status(200).json({
+      message: 'Last seen retrieved successfully',
+      lastSeenEnabled: targetUser.lastSeenEnabled !== false,
+      lastSeenAt: showLastSeen && targetUser.lastSeenAt ? targetUser.lastSeenAt : null,
+    });
+  } catch (error) {
+    console.error('Get user last seen error:', error);
+    return res.status(500).json({ message: 'Server error' });
+  }
+};
+
 module.exports = {
   searchUsers,
   findUser,
+  updateLastSeenEnabled,
+  getUserLastSeen,
 };
 
