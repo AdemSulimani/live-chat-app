@@ -14,7 +14,7 @@ const getFriends = async (req, res) => {
     }
 
     const user = await User.findById(req.user._id)
-      .populate('friends', 'name displayName username profilePhoto activityStatus lastSeenEnabled lastSeenAt')
+      .populate('friends', 'name displayName username profilePhoto activityStatus lastSeenAt')
       .select('friends');
 
     if (!user) {
@@ -39,15 +39,6 @@ const getFriends = async (req, res) => {
         // Calculate displayed status based on online status and activity preference
         const displayedStatus = await getDisplayedStatusForUser(friendIdStr);
 
-        // Get current user to check lastSeenEnabled
-        const currentUser = await User.findById(req.user._id).select('lastSeenEnabled');
-        
-        // Privacy check: lastSeenAt dhe lastSeenEnabled shfaqen vetëm nëse:
-        // 1. Friend-i ka lastSeenEnabled = true
-        // 2. Current user ka lastSeenEnabled = true (reciprocitet)
-        const showLastSeen = friend.lastSeenEnabled !== false && 
-                            currentUser?.lastSeenEnabled !== false;
-
         return {
           id: friendIdStr,
           name: friend.displayName || friend.name,
@@ -56,8 +47,7 @@ const getFriends = async (req, res) => {
           isOnline: isOnline,
           activityStatus: friend.activityStatus || 'offline',
           displayedStatus: displayedStatus,
-          lastSeenEnabled: friend.lastSeenEnabled !== false,
-          lastSeenAt: showLastSeen && friend.lastSeenAt ? friend.lastSeenAt : null,
+          lastSeenAt: friend.lastSeenAt || null,
           unreadCount: unreadCount,
         };
       })
@@ -148,13 +138,13 @@ const getFriendStatus = async (req, res) => {
     }
 
     // Check if friend exists
-    const friend = await User.findById(friendId).select('activityStatus lastSeenEnabled lastSeenAt');
+    const friend = await User.findById(friendId).select('activityStatus lastSeenAt');
     if (!friend) {
       return res.status(404).json({ message: 'Friend not found' });
     }
 
     // Check if they are actually friends
-    const user = await User.findById(req.user._id).select('lastSeenEnabled');
+    const user = await User.findById(req.user._id);
     if (!user) {
       return res.status(404).json({ message: 'Current user not found' });
     }
@@ -169,19 +159,12 @@ const getFriendStatus = async (req, res) => {
     // Calculate displayed status based on online status and activity preference
     const displayedStatus = await getDisplayedStatusForUser(friendId);
 
-    // Privacy check: lastSeenAt shfaqet vetëm nëse:
-    // 1. Friend-i ka lastSeenEnabled = true
-    // 2. Current user ka lastSeenEnabled = true (reciprocitet)
-    const showLastSeen = friend.lastSeenEnabled !== false && 
-                        user.lastSeenEnabled !== false;
-
     return res.status(200).json({
       message: 'Friend status retrieved successfully',
       isOnline: isOnline,
       activityStatus: friend.activityStatus || 'offline',
       displayedStatus: displayedStatus,
-      lastSeenEnabled: friend.lastSeenEnabled !== false,
-      lastSeenAt: showLastSeen && friend.lastSeenAt ? friend.lastSeenAt : null,
+      lastSeenAt: friend.lastSeenAt || null,
     });
   } catch (error) {
     console.error('Get friend status error:', error);

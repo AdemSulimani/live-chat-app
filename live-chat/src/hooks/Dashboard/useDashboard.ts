@@ -554,7 +554,7 @@ export function useDashboard() {
         // Dëgjo për message_seen event - kur mesazhi lexohet nga marrësi
         // Data: { messageId, readBy, readAt, lastSeenAt }
         socket.on('message_seen', (data: any) => {
-            const { messageId, readAt, lastSeenAt } = data;
+            const { messageId, readBy, readAt, lastSeenAt } = data;
             
             // Përditëso statusin e lexuar për mesazhet e përdoruesit aktual
             // Kjo do të shkaktojë re-render dhe përditësim të statusit në UI
@@ -566,23 +566,30 @@ export function useDashboard() {
                 )
             );
 
-            // Përditëso lastSeenAt për friend-in nëse ekziston
-            if (lastSeenAt && selectedFriend) {
+            // Përditëso lastSeenAt për friend-in që ka lexuar mesazhin (readBy)
+            if (lastSeenAt && readBy) {
+                const lastSeenDate = new Date(lastSeenAt);
+                
                 setFriends(prev => prev.map(friend => {
-                    if (friend.id === selectedFriend.id) {
+                    if (friend.id === readBy) {
                         return {
                             ...friend,
-                            lastSeenAt: new Date(lastSeenAt),
+                            lastSeenAt: lastSeenDate,
                         };
                     }
                     return friend;
                 }));
                 
-                // Përditëso edhe selectedFriend për të siguruar që UI përditësohet menjëherë
-                setSelectedFriend(prev => prev ? {
-                    ...prev,
-                    lastSeenAt: new Date(lastSeenAt),
-                } : null);
+                // Përditëso edhe selectedFriend nëse është friend-i që ka lexuar mesazhin
+                setSelectedFriend(prev => {
+                    if (prev && prev.id === readBy) {
+                        return {
+                            ...prev,
+                            lastSeenAt: lastSeenDate,
+                        };
+                    }
+                    return prev;
+                });
             }
         });
 
@@ -614,55 +621,31 @@ export function useDashboard() {
             
             // Përditëso lastSeenAt për friend-in nëse ekziston në friends list
             if (userId && lastSeenAt) {
+                const lastSeenDate = new Date(lastSeenAt);
+                
                 setFriends(prev => prev.map(friend => {
                     if (friend.id === userId) {
                         return {
                             ...friend,
-                            lastSeenAt: new Date(lastSeenAt),
+                            lastSeenAt: lastSeenDate,
                         };
                     }
                     return friend;
                 }));
                 
-                // Nëse është friend-i i zgjedhur aktualisht, përditëso edhe selectedFriend
-                if (selectedFriend && selectedFriend.id === userId) {
-                    setSelectedFriend(prev => prev ? {
-                        ...prev,
-                        lastSeenAt: new Date(lastSeenAt),
-                    } : null);
-                }
+                // Përditëso edhe selectedFriend nëse është friend-i i zgjedhur aktualisht
+                setSelectedFriend(prev => {
+                    if (prev && prev.id === userId) {
+                        return {
+                            ...prev,
+                            lastSeenAt: lastSeenDate,
+                        };
+                    }
+                    return prev;
+                });
             }
         });
 
-        // ============================================
-        // LISTEN FOR LAST SEEN SETTING UPDATED
-        // ============================================
-        // Dëgjo për last_seen_setting_updated event - kur një mik ndryshon lastSeenEnabled setting
-        // Data: { userId, lastSeenEnabled }
-        socket.on('last_seen_setting_updated', (data: any) => {
-            const { userId, lastSeenEnabled } = data;
-            
-            // Përditëso lastSeenEnabled për friend-in nëse ekziston në friends list
-            if (userId && typeof lastSeenEnabled === 'boolean') {
-                setFriends(prev => prev.map(friend => {
-                    if (friend.id === userId) {
-                        return {
-                            ...friend,
-                            lastSeenEnabled: lastSeenEnabled,
-                        };
-                    }
-                    return friend;
-                }));
-                
-                // Nëse është friend-i i zgjedhur aktualisht, përditëso edhe selectedFriend
-                if (selectedFriend && selectedFriend.id === userId) {
-                    setSelectedFriend(prev => prev ? {
-                        ...prev,
-                        lastSeenEnabled: lastSeenEnabled,
-                    } : null);
-                }
-            }
-        });
 
         // ============================================
         // LISTEN FOR MESSAGE EDITED (REAL-TIME SYNC)
@@ -689,7 +672,9 @@ export function useDashboard() {
                     content: message.content,
                     timestamp: new Date(message.timestamp),
                     isRead: message.isRead,
-                    isEdited: message.isEdited || true,
+                    readAt: message.readAt ? new Date(message.readAt) : undefined,
+                    deliveredAt: message.deliveredAt ? new Date(message.deliveredAt) : undefined,
+                    isEdited: message.isEdited !== undefined ? message.isEdited : true,
                     editedAt: message.editedAt ? new Date(message.editedAt) : new Date(),
                 };
 
@@ -807,7 +792,6 @@ export function useDashboard() {
             socket.off('message_seen');
             socket.off('message_delivered');
             socket.off('last_seen_updated');
-            socket.off('last_seen_setting_updated');
             socket.off('message_edited');
             socket.off('message_deleted');
             socket.off('user_status_changed');
@@ -975,8 +959,8 @@ export function useDashboard() {
                         msg => msg.senderId === selectedFriend.id && !msg.isRead
                     );
 
-                    // Nëse ka mesazhe të palexuara dhe lastSeenEnabled është true, shënoji si të lexuara
-                    if (unreadMessages.length > 0 && currentUser.lastSeenEnabled !== false) {
+                    // Nëse ka mesazhe të palexuara, shënoji si të lexuara
+                    if (unreadMessages.length > 0) {
                         const readAt = new Date();
                         
                         // Dërgo message_received për çdo mesazh të palexuar
@@ -1037,9 +1021,9 @@ export function useDashboard() {
         );
 
         // Dërgo message_received për çdo mesazh të palexuar
-        // VËREJTJE: Kjo do të funksionojë vetëm nëse useri është në fund dhe lastSeenEnabled është true
+        // Kjo do të funksionojë vetëm nëse useri është në fund
         // Për scroll manual, shih useEffect më lart
-        if (unreadMessages.length > 0 && isUserAtBottom() && currentUser.lastSeenEnabled !== false) {
+        if (unreadMessages.length > 0 && isUserAtBottom()) {
             const readAt = new Date();
             
             unreadMessages.forEach(msg => {
@@ -1064,7 +1048,7 @@ export function useDashboard() {
                 return friend;
             }));
         }
-    }, [messages, socket, selectedFriend, currentUser.lastSeenEnabled, isUserAtBottom]);
+    }, [messages, socket, selectedFriend, isUserAtBottom]);
 
     // ============================================
     // INTERSECTION OBSERVER FOR MESSAGE VISIBILITY
@@ -1072,7 +1056,7 @@ export function useDashboard() {
     // Përdor Intersection Observer për të detektuar kur mesazhet janë në viewport
     // Kjo është më e saktë se scroll position dhe funksionon edhe për mesazhe të reja
     useEffect(() => {
-        if (!socket || !selectedFriend || messages.length === 0 || currentUser.lastSeenEnabled === false) {
+        if (!socket || !selectedFriend || messages.length === 0) {
             return;
         }
 
@@ -1129,7 +1113,7 @@ export function useDashboard() {
         return () => {
             observers.forEach(observer => observer.disconnect());
         };
-    }, [messages, socket, selectedFriend, currentUser.lastSeenEnabled]);
+    }, [messages, socket, selectedFriend]);
 
     // ============================================
     // FETCH MESSAGES FROM API - PERSISTENCE AFTER REFRESH
@@ -1216,16 +1200,13 @@ export function useDashboard() {
                     // MARK MESSAGES AS READ WHEN CHAT IS OPENED
                     // ============================================
                     // Kur hapet chat-i, marko të gjitha mesazhet e palexuara si të lexuara
-                    // VËREJTJE: Mesazhet markohen si të lexuara VETËM nëse lastSeenEnabled = true
-                    // Nëse lastSeenEnabled = false, mesazhet NUK shënohen si të lexuara (privacy)
-                    if (socket && selectedFriend && currentUser.lastSeenEnabled !== false) {
+                    if (socket && selectedFriend) {
                         const unreadMessages = formattedMessages.filter(
                             msg => msg.senderId === selectedFriend.id && !msg.isRead
                         );
 
                         if (unreadMessages.length > 0) {
                             // Dërgo message_received për çdo mesazh të palexuar
-                            // Backend do të kontrollojë privacy dhe do të dërgojë message_seen vetëm nëse lastSeenEnabled = true
                             unreadMessages.forEach(msg => {
                                 socket.emit('message_received', { messageId: msg.id });
                             });
@@ -2123,7 +2104,9 @@ export function useDashboard() {
                     content: data.data.content,
                     timestamp: new Date(data.data.timestamp),
                     isRead: data.data.isRead,
-                    isEdited: data.data.isEdited || true,
+                    readAt: data.data.readAt ? new Date(data.data.readAt) : undefined,
+                    deliveredAt: data.data.deliveredAt ? new Date(data.data.deliveredAt) : undefined,
+                    isEdited: data.data.isEdited !== undefined ? data.data.isEdited : true,
                     editedAt: data.data.editedAt ? new Date(data.data.editedAt) : editedAt,
                 };
 
@@ -2428,27 +2411,62 @@ export function useDashboard() {
     };
 
     // ============================================
-    // HELPER: CHECK IF LAST SEEN SHOULD BE DISPLAYED
+    // HELPER: FORMAT LAST SEEN TIME
     // ============================================
-    // Kontrollon nëse last seen duhet të shfaqet bazuar në privacy settings
-    // Kthen true nëse duhet të shfaqet, false përndryshe
-    const shouldShowLastSeen = (
-        friendLastSeenEnabled?: boolean,
-        currentUserLastSeenEnabled?: boolean
-    ): boolean => {
-        // Last seen shfaqet vetëm nëse:
-        // 1. Friend-i ka lastSeenEnabled = true
-        // 2. Current user ka lastSeenEnabled = true (reciprocitet)
-        return friendLastSeenEnabled !== false && currentUserLastSeenEnabled !== false;
+    // Format kohën për "Last Seen" me detaje të shtuara
+    // Kthen string format si "just now", "5 minutes ago", "yesterday at 09:12 PM", etj.
+    const formatLastSeenTime = (lastSeenAt: Date | string): string => {
+        const targetDate = lastSeenAt instanceof Date ? lastSeenAt : new Date(lastSeenAt);
+        
+        // Kontrollo nëse data është e vlefshme
+        if (isNaN(targetDate.getTime())) {
+            return 'recently';
+        }
+
+        const now = new Date();
+        const diffMs = now.getTime() - targetDate.getTime();
+        const diffMins = Math.floor(diffMs / 60000);
+        const diffHours = Math.floor(diffMs / 3600000);
+        const diffDays = Math.floor(diffMs / 86400000);
+
+        // Format kohën në HH:MM AM/PM
+        const formatTime = (date: Date): string => {
+            const hours = date.getHours();
+            const minutes = date.getMinutes();
+            const ampm = hours >= 12 ? 'PM' : 'AM';
+            const displayHours = hours % 12 || 12;
+            const displayMinutes = minutes < 10 ? `0${minutes}` : minutes;
+            return `${displayHours}:${displayMinutes} ${ampm}`;
+        };
+
+        // Format datën në DD/MM/YYYY
+        const formatDate = (date: Date): string => {
+            const day = date.getDate();
+            const month = date.getMonth() + 1;
+            const year = date.getFullYear();
+            return `${day < 10 ? '0' : ''}${day}/${month < 10 ? '0' : ''}${month}/${year}`;
+        };
+
+        if (diffMins < 1) {
+            return 'just now';
+        } else if (diffMins < 60) {
+            return `${diffMins} ${diffMins === 1 ? 'minute' : 'minutes'} ago`;
+        } else if (diffHours < 24) {
+            return `${diffHours} ${diffHours === 1 ? 'hour' : 'hours'} ago`;
+        } else if (diffDays === 1) {
+            return `yesterday at ${formatTime(targetDate)}`;
+        } else {
+            return `${formatDate(targetDate)} at ${formatTime(targetDate)}`;
+        }
     };
+
 
     // ============================================
     // HELPER: GET MESSAGE STATUS
     // ============================================
     // Llogarit statusin e mesazhit (Delivered/Seen) për mesazhet e dërguara
-    // Privacy: "Seen" shfaqet vetëm nëse TË DY përdoruesit kanë lastSeenEnabled = true (reciprocitet)
-    // Nëse njëri ka lastSeenEnabled = false, shfaqet "Delivered" në vend të "Seen"
-    const getMessageStatus = (message: Message, receiverLastSeenEnabled?: boolean, currentUserLastSeenEnabled?: boolean): string | null => {
+    // Llogarit statusin e mesazhit (Delivered/Seen) për mesazhet e dërguara
+    const getMessageStatus = (message: Message): string | null => {
         // Vetëm për mesazhet e dërguara nga përdoruesi aktual
         if (message.senderId !== 'current') {
             return null;
@@ -2456,36 +2474,30 @@ export function useDashboard() {
 
         // Nëse mesazhi është i lexuar dhe ka readAt
         if (message.isRead && message.readAt) {
-            // Privacy check: "Seen" shfaqet vetëm nëse TË DY përdoruesit kanë lastSeenEnabled = true
-            // Reciprocitet: Nëse njëri ka turn off last seen, asnjëri nuk duhet të shohë read receipts
-            if (receiverLastSeenEnabled !== false && currentUserLastSeenEnabled !== false) {
-                // Konverto readAt në Date nëse është string
-                const readAt = message.readAt instanceof Date ? message.readAt : new Date(message.readAt);
-                
-                // Kontrollo nëse data është e vlefshme
-                if (isNaN(readAt.getTime())) {
-                    // Nëse readAt nuk është valid, shfaq "Delivered" nëse ka deliveredAt
-                    if (message.deliveredAt) {
-                        return 'Delivered';
-                    }
-                    return 'Sending...';
-                }
-
-                // Përdor funksionin helper për llogaritjen e kohës
-                const timeAgo = calculateTimeAgo(readAt);
-                if (timeAgo === 'just now') {
-                    return 'Seen just now';
-                } else if (timeAgo.includes('ago')) {
-                    return `Seen ${timeAgo}`;
-                } else {
-                    return `Seen on ${readAt.toLocaleDateString()}`;
-                }
-            } else {
-                // Nëse lastSeenEnabled = false, shfaq "Delivered" në vend të "Seen"
+            // Konverto readAt në Date nëse është string
+            const readAt = message.readAt instanceof Date ? message.readAt : new Date(message.readAt);
+            
+            // Kontrollo nëse data është e vlefshme
+            if (isNaN(readAt.getTime())) {
+                // Nëse readAt nuk është valid, shfaq "Delivered" nëse ka deliveredAt
                 if (message.deliveredAt) {
                     return 'Delivered';
                 }
+                // Nëse mesazhi është i edituar, mos shfaq "Sending..."
+                if (message.isEdited) {
+                    return null;
+                }
                 return 'Sending...';
+            }
+
+            // Përdor funksionin helper për llogaritjen e kohës
+            const timeAgo = calculateTimeAgo(readAt);
+            if (timeAgo === 'just now') {
+                return 'Seen just now';
+            } else if (timeAgo.includes('ago')) {
+                return `Seen ${timeAgo}`;
+            } else {
+                return `Seen on ${readAt.toLocaleDateString()}`;
             }
         }
 
@@ -2495,48 +2507,13 @@ export function useDashboard() {
         }
 
         // Nëse mesazhi nuk është ende i dorëzuar
+        // Nëse mesazhi është i edituar, mos shfaq "Sending..."
+        if (message.isEdited) {
+            return null;
+        }
         return 'Sending...';
     };
 
-    // ============================================
-    // HELPER: FORMAT LAST SEEN
-    // ============================================
-    // Formaton last seen për të shfaqur në chat header
-    // Privacy: last seen shfaqet vetëm nëse të dy përdoruesit kanë lastSeenEnabled = true
-    // Nëse privacy check dështon, kthen "Last seen unavailable"
-    const formatLastSeen = (lastSeenAt?: Date | string, friendLastSeenEnabled?: boolean, currentUserLastSeenEnabled?: boolean): string | null => {
-        // Përdor funksionin helper për kontrollin e privacy
-        if (!shouldShowLastSeen(friendLastSeenEnabled, currentUserLastSeenEnabled)) {
-            return 'Last seen unavailable';
-        }
-
-        if (!lastSeenAt) {
-            return 'Last seen unavailable';
-        }
-
-        // Convert to Date object if it's a string
-        const lastSeenDate = lastSeenAt instanceof Date ? lastSeenAt : new Date(lastSeenAt);
-        
-        // Check if the date is valid
-        if (isNaN(lastSeenDate.getTime())) {
-            return 'Last seen unavailable';
-        }
-
-        // Përdor funksionin helper për llogaritjen e kohës
-        const timeAgo = calculateTimeAgo(lastSeenDate);
-        
-        // Formatimi i kohës sipas kërkesave
-        if (timeAgo === 'just now') {
-            return 'Last seen just now';
-        } else if (timeAgo.includes('ago')) {
-            return `Last seen ${timeAgo}`;
-        } else {
-            // Për > 24 orë, shfaq "Last seen on [date] at [time]"
-            const dateStr = lastSeenDate.toLocaleDateString();
-            const timeStr = lastSeenDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            return `Last seen on ${dateStr} at ${timeStr}`;
-        }
-    };
 
     return {
         friends,
@@ -2604,11 +2581,9 @@ export function useDashboard() {
         handleDeleteMessage,
         // Message status helper
         getMessageStatus,
-        // Last seen formatter
-        formatLastSeen,
         // Helper functions
         calculateTimeAgo,
-        shouldShowLastSeen
+        formatLastSeenTime
     };
 }
 

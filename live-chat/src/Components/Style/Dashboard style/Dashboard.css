@@ -906,20 +906,8 @@
 .chat-friend-status {
     font-size: 12px;
     margin: 4px 0 0 0;
-    font-weight: 500;
-}
-
-/* Status colors */
-.chat-friend-status.status-online {
-    color: #4ade80; /* Green */
-}
-
-.chat-friend-status.status-offline {
-    color: #999; /* Gray */
-}
-
-.chat-friend-status.status-do_not_disturb {
-    color: #f59e0b; /* Orange/Amber */
+    font-weight: 400;
+    color: #666; /* Gray color for "Last seen" text */
 }
 
 /* Messages Container */
