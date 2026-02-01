@@ -413,9 +413,39 @@ export function Dashboard() {
                                 <div>
                                     <h3 className="chat-friend-name">{selectedFriend.name}</h3>
                                     <p className="chat-friend-status">
-                                        {selectedFriend.lastSeenAt 
-                                            ? `Last seen ${formatLastSeenTime(selectedFriend.lastSeenAt)}`
-                                            : 'Last seen recently'}
+                                        {(() => {
+                                            // ============================================
+                                            // HEADER DISPLAY LOGIC: Last Seen vs Activity Status
+                                            // ============================================
+                                            // Shfaq last seen vetëm nëse:
+                                            // 1. Friend ka lastSeenEnabled = true
+                                            // 2. Current user ka lastSeenEnabled = true (reciprocitet)
+                                            // Nëse njëri e ka disable, shfaq activity status në vend të last seen
+                                            
+                                            const friendLastSeenEnabled = selectedFriend.lastSeenEnabled !== false; // Default: true
+                                            const currentUserLastSeenEnabled = currentUser?.lastSeenEnabled !== false; // Default: true
+                                            const showLastSeen = friendLastSeenEnabled && currentUserLastSeenEnabled;
+                                            
+                                            if (showLastSeen) {
+                                                // Shfaq last seen nëse të dy kanë lastSeenEnabled = true
+                                                return selectedFriend.lastSeenAt 
+                                                    ? `Last seen ${formatLastSeenTime(selectedFriend.lastSeenAt)}`
+                                                    : 'Last seen recently';
+                                            } else {
+                                                // Shfaq activity status nëse njëri e ka disable
+                                                const status = selectedFriend.displayedStatus || 'offline';
+                                                switch (status) {
+                                                    case 'online':
+                                                        return 'Online';
+                                                    case 'offline':
+                                                        return 'Offline';
+                                                    case 'do_not_disturb':
+                                                        return 'Do Not Disturb';
+                                                    default:
+                                                        return 'Offline';
+                                                }
+                                            }
+                                        })()}
                                     </p>
                                 </div>
                             </div>

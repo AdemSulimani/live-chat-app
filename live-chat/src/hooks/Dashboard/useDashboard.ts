@@ -252,6 +252,7 @@ export function useDashboard() {
                             displayedStatus,
                             timestamp: friend.timestamp ? new Date(friend.timestamp) : new Date(),
                             lastSeenAt: friend.lastSeenAt ? new Date(friend.lastSeenAt) : undefined,
+                            lastSeenEnabled: friend.lastSeenEnabled !== undefined ? friend.lastSeenEnabled : true, // Default: true
                         };
                     });
                     setFriends(formattedFriends);
@@ -557,41 +558,76 @@ export function useDashboard() {
         socket.on('message_seen', (data: any) => {
             const { messageId, readBy, readAt, lastSeenAt } = data;
             
-            // Përditëso statusin e lexuar për mesazhet e përdoruesit aktual
-            // Kjo do të shkaktojë re-render dhe përditësim të statusit në UI
-            setMessages(prev =>
-                prev.map(msg => 
-                    msg.id === messageId 
-                        ? { ...msg, isRead: true, readAt: readAt ? new Date(readAt) : new Date() } 
-                        : msg
-                )
-            );
-
-            // Përditëso lastSeenAt për friend-in që ka lexuar mesazhin (readBy)
-            if (lastSeenAt && readBy) {
-                const lastSeenDate = new Date(lastSeenAt);
+            // ============================================
+            // PRIVACY CHECK: Message Seen Status Update
+            // ============================================
+            // Përditëso isRead status vetëm nëse:
+            // 1. Friend (readBy) ka lastSeenEnabled = true
+            // 2. Current user ka lastSeenEnabled = true (reciprocitet)
+            // Nëse njëri e ka disable, mos përditëso isRead në "Seen", mban "Delivered"
+            const currentUserLastSeenEnabled = currentUser.lastSeenEnabled !== false; // Default: true
+            
+            // Kontrollo lastSeenEnabled për friend dhe përditëso states
+            setFriends(prev => {
+                const friend = prev.find(f => f.id === readBy);
+                const friendLastSeenEnabled = friend?.lastSeenEnabled !== false; // Default: true
+                const showSeenStatus = currentUserLastSeenEnabled && friendLastSeenEnabled;
                 
-                setFriends(prev => prev.map(friend => {
-                    if (friend.id === readBy) {
-                        return {
-                            ...friend,
-                            lastSeenAt: lastSeenDate,
-                        };
-                    }
-                    return friend;
-                }));
+                // Përditëso statusin e lexuar për mesazhet e përdoruesit aktual
+                // Por vetëm nëse të dy kanë lastSeenEnabled = true
+                if (showSeenStatus) {
+                    setMessages(prevMessages =>
+                        prevMessages.map(msg => 
+                            msg.id === messageId 
+                                ? { ...msg, isRead: true, readAt: readAt ? new Date(readAt) : new Date() } 
+                                : msg
+                        )
+                    );
+                }
+                // Nëse njëri e ka disable, mos përditëso isRead - mesazhi do të mbetet me status "Delivered"
                 
-                // Përditëso edhe selectedFriend nëse është friend-i që ka lexuar mesazhin
-                setSelectedFriend(prev => {
-                    if (prev && prev.id === readBy) {
+                // ============================================
+                // PRIVACY CHECK: Last Seen Update from message_seen
+                // ============================================
+                // Përditëso lastSeenAt vetëm nëse:
+                // 1. Friend (readBy) ka lastSeenEnabled = true
+                // 2. Current user ka lastSeenEnabled = true (reciprocitet)
+                // Nëse njëri e ka disable, mos përditëso lastSeenAt
+                if (lastSeenAt && readBy && showSeenStatus) {
+                    const lastSeenDate = new Date(lastSeenAt);
+                    
+                    // Përditëso lastSeenAt vetëm nëse të dy kanë lastSeenEnabled = true
+                    return prev.map(f => {
+                        if (f.id === readBy) {
+                            return {
+                                ...f,
+                                lastSeenAt: lastSeenDate,
+                            };
+                        }
+                        return f;
+                    });
+                }
+                
+                return prev;
+            });
+            
+            // Përditëso edhe selectedFriend nëse është friend-i që ka lexuar mesazhin
+            setSelectedFriend(prev => {
+                if (prev && prev.id === readBy) {
+                    const currentUserLastSeenEnabled = currentUser.lastSeenEnabled !== false; // Default: true
+                    const friendLastSeenEnabled = prev.lastSeenEnabled !== false; // Default: true
+                    const showLastSeen = currentUserLastSeenEnabled && friendLastSeenEnabled;
+                    
+                    // Përditëso lastSeenAt vetëm nëse të dy kanë lastSeenEnabled = true
+                    if (showLastSeen && lastSeenAt) {
                         return {
                             ...prev,
-                            lastSeenAt: lastSeenDate,
+                            lastSeenAt: new Date(lastSeenAt),
                         };
                     }
-                    return prev;
-                });
-            }
+                }
+                return prev;
+            });
         });
 
         // ============================================
@@ -620,27 +656,56 @@ export function useDashboard() {
         socket.on('last_seen_updated', (data: any) => {
             const { userId, lastSeenAt } = data;
             
-            // Përditëso lastSeenAt për friend-in nëse ekziston në friends list
+            // ============================================
+            // PRIVACY CHECK: Last Seen Updated Event
+            // ============================================
+            // Përditëso lastSeenAt vetëm nëse:
+            // 1. Friend (userId) ka lastSeenEnabled = true
+            // 2. Current user ka lastSeenEnabled = true (reciprocitet)
+            // Nëse njëri e ka disable, mos përditëso lastSeenAt
+            // Backend duhet të ketë kontrolluar këtë, por kontrollojmë edhe në frontend për siguri
             if (userId && lastSeenAt) {
                 const lastSeenDate = new Date(lastSeenAt);
                 
-                setFriends(prev => prev.map(friend => {
-                    if (friend.id === userId) {
-                        return {
-                            ...friend,
-                            lastSeenAt: lastSeenDate,
-                        };
+                // Kontrollo lastSeenEnabled për current user dhe friend
+                const currentUserLastSeenEnabled = currentUser.lastSeenEnabled !== false; // Default: true
+                
+                setFriends(prev => {
+                    const friend = prev.find(f => f.id === userId);
+                    if (friend) {
+                        const friendLastSeenEnabled = friend.lastSeenEnabled !== false; // Default: true
+                        const showLastSeen = currentUserLastSeenEnabled && friendLastSeenEnabled;
+                        
+                        // Përditëso lastSeenAt vetëm nëse të dy kanë lastSeenEnabled = true
+                        if (showLastSeen) {
+                            return prev.map(f => {
+                                if (f.id === userId) {
+                                    return {
+                                        ...f,
+                                        lastSeenAt: lastSeenDate,
+                                    };
+                                }
+                                return f;
+                            });
+                        }
                     }
-                    return friend;
-                }));
+                    return prev;
+                });
                 
                 // Përditëso edhe selectedFriend nëse është friend-i i zgjedhur aktualisht
                 setSelectedFriend(prev => {
                     if (prev && prev.id === userId) {
-                        return {
-                            ...prev,
-                            lastSeenAt: lastSeenDate,
-                        };
+                        const currentUserLastSeenEnabled = currentUser.lastSeenEnabled !== false; // Default: true
+                        const friendLastSeenEnabled = prev.lastSeenEnabled !== false; // Default: true
+                        const showLastSeen = currentUserLastSeenEnabled && friendLastSeenEnabled;
+                        
+                        // Përditëso lastSeenAt vetëm nëse të dy kanë lastSeenEnabled = true
+                        if (showLastSeen) {
+                            return {
+                                ...prev,
+                                lastSeenAt: lastSeenDate,
+                            };
+                        }
                     }
                     return prev;
                 });
@@ -1357,7 +1422,12 @@ export function useDashboard() {
         // Përdor statusin e cache-uar nëse Socket.IO është i lidhur dhe friend ka displayedStatus
         if (isConnected && socket && friend.displayedStatus) {
             // Përdor statusin e cache-uar - nuk ka nevojë për API call
-            setSelectedFriend(friend);
+            // Sigurohem që lastSeenEnabled është i pranishëm (default: true)
+            const friendWithLastSeen: Friend = {
+                ...friend,
+                lastSeenEnabled: friend.lastSeenEnabled !== undefined ? friend.lastSeenEnabled : true,
+            };
+            setSelectedFriend(friendWithLastSeen);
             // Rivendos numrin e mesazheve të palexuara
             setFriends(prev => prev.map(f => {
                 if (f.id === friend.id) {
@@ -1375,7 +1445,12 @@ export function useDashboard() {
         const token = getToken();
         if (!token) {
             // Nëse nuk ka token, përdor friend-in siç është
-            setSelectedFriend(friend);
+            // Sigurohem që lastSeenEnabled është i pranishëm (default: true)
+            const friendWithLastSeen: Friend = {
+                ...friend,
+                lastSeenEnabled: friend.lastSeenEnabled !== undefined ? friend.lastSeenEnabled : true,
+            };
+            setSelectedFriend(friendWithLastSeen);
             setFriends(prev => prev.map(f => {
                 if (f.id === friend.id) {
                     return { ...f, unreadCount: 0 };
@@ -1403,6 +1478,8 @@ export function useDashboard() {
                     isOnline: data.isOnline || false,
                     activityStatus: data.activityStatus || 'offline',
                     displayedStatus: data.displayedStatus || 'offline',
+                    lastSeenEnabled: data.lastSeenEnabled !== undefined ? data.lastSeenEnabled : friend.lastSeenEnabled !== false, // Default: true
+                    lastSeenAt: data.lastSeenAt ? new Date(data.lastSeenAt) : friend.lastSeenAt,
                 };
                 setSelectedFriend(updatedFriend);
 
@@ -1414,6 +1491,8 @@ export function useDashboard() {
                             isOnline: data.isOnline || false,
                             displayedStatus: data.displayedStatus || 'offline',
                             activityStatus: data.activityStatus || 'offline',
+                            lastSeenEnabled: data.lastSeenEnabled !== undefined ? data.lastSeenEnabled : f.lastSeenEnabled !== false, // Default: true
+                            lastSeenAt: data.lastSeenAt ? new Date(data.lastSeenAt) : f.lastSeenAt,
                             unreadCount: 0, // Rivendos numrin e mesazheve të palexuara
                         };
                     }
@@ -1421,7 +1500,12 @@ export function useDashboard() {
                 }));
             } else {
                 // Nëse API dështon, përdor friend-in siç është (me displayedStatus të cache-uar ose default)
-                setSelectedFriend(friend);
+                // Sigurohem që lastSeenEnabled është i pranishëm (default: true)
+                const friendWithLastSeen: Friend = {
+                    ...friend,
+                    lastSeenEnabled: friend.lastSeenEnabled !== undefined ? friend.lastSeenEnabled : true,
+                };
+                setSelectedFriend(friendWithLastSeen);
                 // Rivendos numrin e mesazheve të palexuara
                 setFriends(prev => prev.map(f => {
                     if (f.id === friend.id) {
@@ -1433,7 +1517,12 @@ export function useDashboard() {
         } catch (error) {
             console.error('Error fetching friend status:', error);
             // Nëse ka gabim, përdor friend-in siç është (me displayedStatus të cache-uar ose default)
-            setSelectedFriend(friend);
+            // Sigurohem që lastSeenEnabled është i pranishëm (default: true)
+            const friendWithLastSeen: Friend = {
+                ...friend,
+                lastSeenEnabled: friend.lastSeenEnabled !== undefined ? friend.lastSeenEnabled : true,
+            };
+            setSelectedFriend(friendWithLastSeen);
             // Rivendos numrin e mesazheve të palexuara
             setFriends(prev => prev.map(f => {
                 if (f.id === friend.id) {
@@ -2466,12 +2555,23 @@ export function useDashboard() {
     // HELPER: GET MESSAGE STATUS
     // ============================================
     // Llogarit statusin e mesazhit (Delivered/Seen) për mesazhet e dërguara
-    // Llogarit statusin e mesazhit (Delivered/Seen) për mesazhet e dërguara
+    // Privacy check: "Seen" shfaqet vetëm nëse të dy kanë lastSeenEnabled = true
     const getMessageStatus = (message: Message): string | null => {
         // Vetëm për mesazhet e dërguara nga përdoruesi aktual
         if (message.senderId !== 'current') {
             return null;
         }
+
+        // ============================================
+        // PRIVACY CHECK: Message Seen Status
+        // ============================================
+        // "Seen" status shfaqet vetëm nëse:
+        // 1. Current user (sender) ka lastSeenEnabled = true
+        // 2. Selected friend (receiver) ka lastSeenEnabled = true (reciprocitet)
+        // Nëse njëri e ka disable, shfaq vetëm "Delivered", jo "Seen"
+        const currentUserLastSeenEnabled = currentUser.lastSeenEnabled !== false; // Default: true
+        const friendLastSeenEnabled = selectedFriend?.lastSeenEnabled !== false; // Default: true
+        const showSeenStatus = currentUserLastSeenEnabled && friendLastSeenEnabled;
 
         // Nëse mesazhi është i lexuar dhe ka readAt
         if (message.isRead && message.readAt) {
@@ -2491,14 +2591,27 @@ export function useDashboard() {
                 return 'Sending...';
             }
 
-            // Përdor funksionin helper për llogaritjen e kohës
-            const timeAgo = calculateTimeAgo(readAt);
-            if (timeAgo === 'just now') {
-                return 'Seen just now';
-            } else if (timeAgo.includes('ago')) {
-                return `Seen ${timeAgo}`;
+            // Shfaq "Seen" vetëm nëse të dy kanë lastSeenEnabled = true
+            if (showSeenStatus) {
+                // Përdor funksionin helper për llogaritjen e kohës
+                const timeAgo = calculateTimeAgo(readAt);
+                if (timeAgo === 'just now') {
+                    return 'Seen just now';
+                } else if (timeAgo.includes('ago')) {
+                    return `Seen ${timeAgo}`;
+                } else {
+                    return `Seen on ${readAt.toLocaleDateString()}`;
+                }
             } else {
-                return `Seen on ${readAt.toLocaleDateString()}`;
+                // Nëse njëri e ka disable, shfaq vetëm "Delivered" edhe nëse mesazhi është i lexuar
+                if (message.deliveredAt) {
+                    return 'Delivered';
+                }
+                // Nëse mesazhi është i edituar, mos shfaq "Sending..."
+                if (message.isEdited) {
+                    return null;
+                }
+                return 'Sending...';
             }
         }
 

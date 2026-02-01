@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import { Friends } from './Friends/Friends';
 import { Blocked } from './Blocked/Blocked';
+import { LastSeen } from './LastSeen/LastSeen';
 
 export function Settings() {
     const navigate = useNavigate();
@@ -55,6 +56,17 @@ export function Settings() {
                         </svg>
                         Blocked
                     </button>
+                    
+                    <button 
+                        className={`settings-section-btn ${selectedSection === 'lastseen' ? 'active' : ''}`}
+                        onClick={() => setSelectedSection('lastseen')}
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <polyline points="12 6 12 12 16 14"></polyline>
+                        </svg>
+                        Last Seen
+                    </button>
                 </div>
 
                 {/* Logout Button */}
@@ -79,6 +91,8 @@ export function Settings() {
                     <Friends onBack={() => setSelectedSection(null)} />
                 ) : selectedSection === 'blocked' ? (
                     <Blocked onBack={() => setSelectedSection(null)} />
+                ) : selectedSection === 'lastseen' ? (
+                    <LastSeen onBack={() => setSelectedSection(null)} />
                 ) : (
                     <div className="settings-content">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
