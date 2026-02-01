@@ -11,6 +11,7 @@ interface UserData {
     statusMessage?: string;
     profilePhoto?: string | null;
     profileCompleted: boolean;
+    activityStatus?: 'online' | 'offline' | 'do_not_disturb';
     createdAt?: string;
 }
 

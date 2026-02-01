@@ -11,6 +11,7 @@ interface ProfileData {
     photoPreview?: string | null;
     email?: string;
     country?: string;
+    activityStatus?: 'online' | 'offline' | 'do_not_disturb';
 }
 
 export function useProfileFull() {
@@ -18,7 +19,8 @@ export function useProfileFull() {
         name: false,
         username: false,
         bio: false,
-        statusMessage: false
+        statusMessage: false,
+        activityStatus: false
     });
 
     const [profileData, setProfileData] = useState<ProfileData>({
@@ -28,7 +30,8 @@ export function useProfileFull() {
         bio: '',
         statusMessage: '',
         profilePhoto: null,
-        photoPreview: null
+        photoPreview: null,
+        activityStatus: 'offline'
     });
 
     const [loading, setLoading] = useState(true);
@@ -81,6 +84,7 @@ export function useProfileFull() {
                         photoPreview: data.profile.profilePhoto || null,
                         email: data.profile.email,
                         country: data.profile.country,
+                        activityStatus: data.profile.activityStatus || 'offline',
                     });
                 } else {
                     // Nëse nuk ka të dhëna, përdor default values
@@ -91,8 +95,31 @@ export function useProfileFull() {
                         bio: '',
                         statusMessage: '',
                         profilePhoto: null,
-                        photoPreview: null
+                        photoPreview: null,
+                        activityStatus: 'offline'
                     });
+                }
+
+                // Load activity status separately
+                try {
+                    const activityResponse = await fetch('http://localhost:5000/api/activity', {
+                        method: 'GET',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json',
+                        },
+                    });
+
+                    if (activityResponse.ok) {
+                        const activityData = await activityResponse.json();
+                        setProfileData(prev => ({
+                            ...prev,
+                            activityStatus: activityData.activityStatus || 'offline'
+                        }));
+                        updateUser({ activityStatus: activityData.activityStatus || 'offline' });
+                    }
+                } catch (err) {
+                    console.log('Could not load activity status:', err);
                 }
             } catch (err) {
                 console.error('Fetch profile error:', err);
@@ -412,6 +439,50 @@ export function useProfileFull() {
         }));
     };
 
+    const updateActivityStatus = async (newStatus: 'online' | 'offline' | 'do_not_disturb') => {
+        setSaving('activityStatus');
+        setSaveError(null);
+
+        try {
+            const token = getToken();
+            if (!token) {
+                setSaveError('You must be logged in to update activity status');
+                setSaving(null);
+                return;
+            }
+
+            const response = await fetch('http://localhost:5000/api/activity', {
+                method: 'PUT',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ activityStatus: newStatus }),
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                setProfileData(prev => ({
+                    ...prev,
+                    activityStatus: data.activityStatus
+                }));
+                updateUser({ activityStatus: data.activityStatus });
+                setIsEditing(prev => ({
+                    ...prev,
+                    activityStatus: false
+                }));
+            } else {
+                const errorData = await response.json();
+                setSaveError(errorData.message || 'Failed to update activity status');
+            }
+        } catch (err) {
+            console.error('Error updating activity status:', err);
+            setSaveError('Failed to update activity status');
+        } finally {
+            setSaving(null);
+        }
+    };
+
     return {
         profileData,
         isEditing,
@@ -424,7 +495,8 @@ export function useProfileFull() {
         handlePhotoUpload,
         toggleEdit,
         handleSave,
-        handleCancel
+        handleCancel,
+        updateActivityStatus
     };
 }
 

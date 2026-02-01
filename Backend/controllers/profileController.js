@@ -24,6 +24,7 @@ const getProfile = async (req, res) => {
       profilePhoto: user.profilePhoto,
       profileCompleted: user.profileCompleted,
       country: user.country,
+      activityStatus: user.activityStatus || 'offline',
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
     };
@@ -119,6 +120,7 @@ const createOrUpdateProfile = async (req, res) => {
       profilePhoto: updatedUser.profilePhoto,
       profileCompleted: updatedUser.profileCompleted,
       country: updatedUser.country,
+      activityStatus: updatedUser.activityStatus || 'offline',
       createdAt: updatedUser.createdAt,
       updatedAt: updatedUser.updatedAt,
     };

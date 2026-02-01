@@ -1,7 +1,7 @@
 const FriendRequest = require('../models/FriendRequest');
 const User = require('../models/User');
 const Notification = require('../models/Notification');
-const { emitToUser } = require('../socket/socketServer');
+const { emitToUser, isUserOnline, getDisplayedStatusForUser } = require('../socket/socketServer');
 
 // @desc    Get friend requests (sent and received)
 // @route   GET /api/friend-requests
@@ -232,14 +232,19 @@ const acceptFriendRequest = async (req, res) => {
 
     // Get updated friends list for both users
     const accepterUser = await User.findById(req.user._id)
-      .populate('friends', 'name displayName username profilePhoto')
+      .populate('friends', 'name displayName username profilePhoto activityStatus')
       .select('friends');
     
     const senderUser = await User.findById(friendRequest.fromUser._id)
-      .populate('friends', 'name displayName username profilePhoto')
+      .populate('friends', 'name displayName username profilePhoto activityStatus')
       .select('friends');
 
     // Emit real-time updates to both users
+    // Llogarit displayedStatus për newFriend
+    const newFriendIdStr = req.user._id.toString();
+    const newFriendIsOnline = isUserOnline(newFriendIdStr);
+    const newFriendDisplayedStatus = await getDisplayedStatusForUser(newFriendIdStr);
+    
     emitToUser(friendRequest.fromUser._id.toString(), 'friend_request_accepted', {
       notification: {
         id: notificationToSender._id.toString(),
@@ -250,21 +255,36 @@ const acceptFriendRequest = async (req, res) => {
         relatedUserId: req.user._id.toString(),
       },
       newFriend: {
-        id: req.user._id.toString(),
+        id: newFriendIdStr,
         name: currentUser.displayName || currentUser.name,
         username: currentUser.username,
         avatar: currentUser.profilePhoto || '',
-        isOnline: false,
+        isOnline: newFriendIsOnline,
+        activityStatus: currentUser.activityStatus || 'offline',
+        displayedStatus: newFriendDisplayedStatus,
       },
-      friends: senderUser.friends.map(friend => ({
-        id: friend._id.toString(),
-        name: friend.displayName || friend.name,
-        username: friend.username,
-        avatar: friend.profilePhoto || '',
-        isOnline: false,
+      friends: await Promise.all(senderUser.friends.map(async (friend) => {
+        const friendIdStr = friend._id.toString();
+        const isOnline = isUserOnline(friendIdStr);
+        const displayedStatus = await getDisplayedStatusForUser(friendIdStr);
+        return {
+          id: friendIdStr,
+          name: friend.displayName || friend.name,
+          username: friend.username,
+          avatar: friend.profilePhoto || '',
+          isOnline: isOnline,
+          activityStatus: friend.activityStatus || 'offline',
+          displayedStatus: displayedStatus,
+        };
       })),
     });
 
+    // Llogarit displayedStatus për newFriend (sender)
+    const senderIdStr = friendRequest.fromUser._id.toString();
+    const senderIsOnline = isUserOnline(senderIdStr);
+    const senderDisplayedStatus = await getDisplayedStatusForUser(senderIdStr);
+    const senderUserFull = await User.findById(senderIdStr).select('activityStatus');
+    
     emitToUser(req.user._id.toString(), 'friend_request_accepted', {
       notification: {
         id: notificationToAccepter._id.toString(),
@@ -275,18 +295,27 @@ const acceptFriendRequest = async (req, res) => {
         relatedUserId: friendRequest.fromUser._id.toString(),
       },
       newFriend: {
-        id: friendRequest.fromUser._id.toString(),
+        id: senderIdStr,
         name: friendRequest.fromUser.displayName || friendRequest.fromUser.name,
         username: friendRequest.fromUser.username,
         avatar: friendRequest.fromUser.profilePhoto || '',
-        isOnline: false,
+        isOnline: senderIsOnline,
+        activityStatus: senderUserFull?.activityStatus || 'offline',
+        displayedStatus: senderDisplayedStatus,
       },
-      friends: accepterUser.friends.map(friend => ({
-        id: friend._id.toString(),
-        name: friend.displayName || friend.name,
-        username: friend.username,
-        avatar: friend.profilePhoto || '',
-        isOnline: false,
+      friends: await Promise.all(accepterUser.friends.map(async (friend) => {
+        const friendIdStr = friend._id.toString();
+        const isOnline = isUserOnline(friendIdStr);
+        const displayedStatus = await getDisplayedStatusForUser(friendIdStr);
+        return {
+          id: friendIdStr,
+          name: friend.displayName || friend.name,
+          username: friend.username,
+          avatar: friend.profilePhoto || '',
+          isOnline: isOnline,
+          activityStatus: friend.activityStatus || 'offline',
+          displayedStatus: displayedStatus,
+        };
       })),
     });
 

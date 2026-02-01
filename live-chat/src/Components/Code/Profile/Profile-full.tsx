@@ -16,7 +16,8 @@ export function ProfileFull() {
         handlePhotoUpload,
         toggleEdit,
         handleSave,
-        handleCancel
+        handleCancel,
+        updateActivityStatus
     } = useProfileFull();
 
     return (
@@ -80,7 +81,7 @@ export function ProfileFull() {
                                     {(profileData.name || profileData.displayName || 'U').charAt(0).toUpperCase()}
                                 </div>
                             )}
-                            <span className="profile-online-indicator"></span>
+                            <span className={`profile-activity-indicator ${profileData.activityStatus || 'offline'}`}></span>
                             <div className="photo-edit-overlay">
                                 {saving === 'photo' && (
                                     <div style={{ 
@@ -319,6 +320,74 @@ export function ProfileFull() {
                             ) : (
                                 <p className="profile-info-value">
                                     {profileData.statusMessage || 'No status message'}
+                                </p>
+                            )}
+                        </div>
+
+                        {/* Activity Status Section */}
+                        <div className="profile-info-item">
+                            <div className="profile-info-header">
+                                <label className="profile-info-label">Activity Status</label>
+                                {!isEditing.activityStatus ? (
+                                    <button 
+                                        className="edit-btn"
+                                        onClick={() => toggleEdit('activityStatus')}
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                        </svg>
+                                        Edit
+                                    </button>
+                                ) : (
+                                    <div className="edit-actions">
+                                        <button 
+                                            className="cancel-btn"
+                                            onClick={() => toggleEdit('activityStatus')}
+                                            disabled={saving === 'activityStatus'}
+                                        >
+                                            Cancel
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                            {isEditing.activityStatus ? (
+                                <div className="activity-status-dropdown">
+                                    <button
+                                        className={`activity-status-option ${profileData.activityStatus === 'online' ? 'selected' : ''}`}
+                                        onClick={() => updateActivityStatus('online')}
+                                        disabled={saving === 'activityStatus'}
+                                    >
+                                        <span className={`activity-status-dot online`}></span>
+                                        Online
+                                    </button>
+                                    <button
+                                        className={`activity-status-option ${profileData.activityStatus === 'offline' ? 'selected' : ''}`}
+                                        onClick={() => updateActivityStatus('offline')}
+                                        disabled={saving === 'activityStatus'}
+                                    >
+                                        <span className={`activity-status-dot offline`}></span>
+                                        Offline
+                                    </button>
+                                    <button
+                                        className={`activity-status-option ${profileData.activityStatus === 'do_not_disturb' ? 'selected' : ''}`}
+                                        onClick={() => updateActivityStatus('do_not_disturb')}
+                                        disabled={saving === 'activityStatus'}
+                                    >
+                                        <span className={`activity-status-dot do-not-disturb`}></span>
+                                        Do Not Disturb
+                                    </button>
+                                    {saving === 'activityStatus' && (
+                                        <p style={{ marginTop: '8px', fontSize: '14px', color: '#666' }}>Updating...</p>
+                                    )}
+                                </div>
+                            ) : (
+                                <p className="profile-info-value">
+                                    <span className={`activity-status-badge ${profileData.activityStatus || 'offline'}`}>
+                                        {profileData.activityStatus === 'online' ? 'Online' : 
+                                         profileData.activityStatus === 'do_not_disturb' ? 'Do Not Disturb' : 
+                                         'Offline'}
+                                    </span>
                                 </p>
                             )}
                         </div>

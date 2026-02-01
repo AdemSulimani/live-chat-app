@@ -54,6 +54,33 @@ const initializeSocket = (server) => {
   globalActiveUsers = activeUsers; // Store globally për të qasur nga helper functions
 
   // ============================================
+  // HELPER: CALCULATE DISPLAYED STATUS (LOCAL)
+  // ============================================
+  // Llogarit statusin që duhet të shfaqet për përdoruesin bazuar në:
+  // 1. Nëse është online (në activeUsers)
+  // 2. Activity status preference (online, offline, do_not_disturb)
+  const getDisplayedStatusLocal = async (userId) => {
+    try {
+      // Nëse përdoruesi nuk është online (nuk është në activeUsers)
+      if (!activeUsers.has(userId)) {
+        return 'offline';
+      }
+
+      // Nëse përdoruesi është online, merr activity status nga DB
+      const user = await User.findById(userId).select('activityStatus');
+      if (!user) {
+        return 'offline';
+      }
+
+      // Përdor funksionin helper global për llogaritjen
+      return getDisplayedStatus(user, userId);
+    } catch (error) {
+      console.error('Error calculating displayed status:', error);
+      return 'offline';
+    }
+  };
+
+  // ============================================
   // ACTIVE CHAT TRACKING
   // ============================================
   // Gjurmo se cili përdorues është në chat me kë
@@ -186,8 +213,38 @@ const initializeSocket = (server) => {
     // Dërgo typing status menjëherë pas lidhjes
     checkAndSendTypingStatus();
 
-    // Notify friends that user is online (optional - për status online/offline)
-    // socket.broadcast.emit('user_online', { userId: socket.userId });
+    // ============================================
+    // NOTIFY FRIENDS WHEN USER CONNECTS
+    // ============================================
+    // Njofto miqtë që përdoruesi është online dhe dërgo statusin e shfaqur
+    const notifyFriendsOnConnect = async () => {
+      try {
+        const user = await User.findById(socket.userId).select('friends activityStatus');
+        if (!user || !user.friends || user.friends.length === 0) {
+          return;
+        }
+
+        // Llogarit statusin e shfaqur
+        const displayedStatus = await getDisplayedStatusLocal(socket.userId);
+
+        // Dërgo njoftim te të gjithë miqtë që janë online
+        user.friends.forEach(async (friendId) => {
+          const friendIdStr = friendId.toString();
+          // Nëse miku është online, dërgo njoftim
+          if (activeUsers.has(friendIdStr)) {
+            io.to(`user:${friendIdStr}`).emit('user_status_changed', {
+              userId: socket.userId,
+              displayedStatus: displayedStatus,
+            });
+          }
+        });
+      } catch (error) {
+        console.error('Error notifying friends on connect:', error);
+      }
+    };
+
+    // Njofto miqtë pas lidhjes
+    notifyFriendsOnConnect();
 
     // Handle send_message event
     socket.on('send_message', async (data) => {
@@ -890,8 +947,35 @@ const initializeSocket = (server) => {
       // Socket.IO automatikisht e heq përdoruesin nga të gjitha rooms kur shkëputet
       // Kështu që nuk kemi nevojë të bëjmë socket.leave() manualisht
 
-      // Notify friends that user is offline (optional - për status online/offline)
-      // socket.broadcast.emit('user_offline', { userId: socket.userId });
+      // ============================================
+      // NOTIFY FRIENDS WHEN USER DISCONNECTS
+      // ============================================
+      // Njofto miqtë që përdoruesi është offline
+      const notifyFriendsOnDisconnect = async () => {
+        try {
+          const user = await User.findById(socket.userId).select('friends');
+          if (!user || !user.friends || user.friends.length === 0) {
+            return;
+          }
+
+          // Kur përdoruesi shkëputet, gjithmonë shfaqet si offline
+          user.friends.forEach(async (friendId) => {
+            const friendIdStr = friendId.toString();
+            // Nëse miku është online, dërgo njoftim
+            if (activeUsers.has(friendIdStr)) {
+              io.to(`user:${friendIdStr}`).emit('user_status_changed', {
+                userId: socket.userId,
+                displayedStatus: 'offline',
+              });
+            }
+          });
+        } catch (error) {
+          console.error('Error notifying friends on disconnect:', error);
+        }
+      };
+
+      // Njofto miqtë pas shkëputjes
+      notifyFriendsOnDisconnect();
     });
   });
 
@@ -934,6 +1018,61 @@ const isUserInChatWith = (userId, friendId) => {
   return globalActiveChats.get(userId) === friendId;
 };
 
+// ============================================
+// HELPER: GET DISPLAYED STATUS (CORE LOGIC)
+// ============================================
+// Funksion helper që llogarit statusin e shfaqur bazuar në:
+// - Nëse përdoruesi është online (në activeUsers)
+// - Activity status preference (online, offline, do_not_disturb)
+// 
+// @param {Object} user - Objekti user me activityStatus
+// @param {String} userId - ID e përdoruesit për kontrollimin e online status
+// @returns {String} 'online' | 'offline' | 'do_not_disturb'
+const getDisplayedStatus = (user, userId) => {
+  // Nëse nuk është online (nuk është në activeUsers)
+  if (!isUserOnline(userId)) {
+    return 'offline';
+  }
+
+  // Nëse është online, kontrollo activityStatus
+  if (user.activityStatus === 'offline') {
+    return 'offline'; // Edhe nëse është online, shfaq offline
+  }
+
+  if (user.activityStatus === 'do_not_disturb') {
+    return 'do_not_disturb'; // Shfaq do not disturb
+  }
+
+  // activityStatus === 'online'
+  return 'online'; // Shfaq online
+};
+
+// Helper function to get displayed status (exported for use in controllers)
+// Version 1: Mer userId dhe bën query në DB
+const getDisplayedStatusForUser = async (userId) => {
+  if (!globalActiveUsers) {
+    return 'offline';
+  }
+  try {
+    // Nëse përdoruesi nuk është online
+    if (!globalActiveUsers.has(userId)) {
+      return 'offline';
+    }
+
+    // Nëse përdoruesi është online, merr activity status nga DB
+    const user = await User.findById(userId).select('activityStatus');
+    if (!user) {
+      return 'offline';
+    }
+
+    // Përdor funksionin helper për llogaritjen
+    return getDisplayedStatus(user, userId);
+  } catch (error) {
+    console.error('Error calculating displayed status:', error);
+    return 'offline';
+  }
+};
+
 module.exports = {
   initializeSocket,
   getIO: () => io,
@@ -941,5 +1080,7 @@ module.exports = {
   emitToUsers,
   isUserOnline,
   isUserInChatWith,
+  getDisplayedStatus, // Core helper function - merr user object dhe userId
+  getDisplayedStatusForUser, // Convenience function - merr userId dhe bën query në DB
 };
 

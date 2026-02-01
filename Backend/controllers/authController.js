@@ -71,6 +71,7 @@ const registerUser = async (req, res) => {
       statusMessage: user.statusMessage,
       profilePhoto: user.profilePhoto,
       profileCompleted: user.profileCompleted || false,
+      activityStatus: user.activityStatus || 'offline',
       createdAt: user.createdAt,
     };
 
@@ -135,6 +136,7 @@ const loginUser = async (req, res) => {
       statusMessage: user.statusMessage,
       profilePhoto: user.profilePhoto,
       profileCompleted: user.profileCompleted || false,
+      activityStatus: user.activityStatus || 'offline',
       createdAt: user.createdAt,
     };
 
