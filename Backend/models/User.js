@@ -79,6 +79,12 @@ const userSchema = new mongoose.Schema(
         ref: 'User',
       },
     ],
+    // Activity status - online, offline, do_not_disturb
+    activityStatus: {
+      type: String,
+      enum: ['online', 'offline', 'do_not_disturb'],
+      default: 'offline',
+    },
   },
   {
     timestamps: true, // createdAt, updatedAt

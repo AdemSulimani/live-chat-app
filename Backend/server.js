@@ -9,9 +9,6 @@ dotenv.config();
 
 const app = express();
 
-// Connect to database
-connectDB();
-
 // Middleware
 app.use(cors());
 app.use(express.json());
@@ -28,6 +25,7 @@ const notificationRoutes = require('./routes/notificationRoutes');
 const blockedRoutes = require('./routes/blockedRoutes');
 const userSearchRoutes = require('./routes/userSearchRoutes');
 const messageRoutes = require('./routes/messageRoutes');
+const activityRoutes = require('./routes/activityRoutes');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/profile', profileRoutes);
@@ -37,6 +35,7 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/blocked', blockedRoutes);
 app.use('/api/users', userSearchRoutes);
 app.use('/api/messages', messageRoutes);
+app.use('/api/activity', activityRoutes);
 
 // Basic route for testing
 app.get('/', (req, res) => {
@@ -50,13 +49,28 @@ app.use(errorHandler);
 
 const PORT = process.env.PORT || 5000;
 
-const server = app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+// Start server function - ensures database is connected before server starts
+const startServer = async () => {
+  try {
+    // Connect to database first
+    await connectDB();
+    
+    // Start server only after database connection is established
+    const server = app.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`);
+    });
 
-// Initialize Socket.IO
-const { initializeSocket } = require('./socket/socketServer');
-initializeSocket(server);
+    // Initialize Socket.IO after server is started
+    const { initializeSocket } = require('./socket/socketServer');
+    initializeSocket(server);
+  } catch (error) {
+    console.error('Failed to start server:', error.message);
+    process.exit(1);
+  }
+};
+
+// Start the server
+startServer();
 
 
  

@@ -120,7 +120,7 @@ export function Dashboard() {
                                     {(currentUser.name || 'U').charAt(0).toUpperCase()}
                                 </div>
                             )}
-                            <span className="online-indicator"></span>
+                            <span className={`activity-indicator ${currentUser.activityStatus || 'offline'}`}></span>
                         </div>
                         <div className="mini-profile-info">
                             <h3 className="mini-profile-name">{currentUser.name || 'User'}</h3>
@@ -140,6 +140,14 @@ export function Dashboard() {
                             {currentUser.statusMessage && (
                                 <p><strong>Status:</strong> {currentUser.statusMessage}</p>
                             )}
+                            <p>
+                                <strong>Activity:</strong>{' '}
+                                <span className={`activity-status-badge ${currentUser.activityStatus || 'offline'}`}>
+                                    {currentUser.activityStatus === 'online' ? 'Online' : 
+                                     currentUser.activityStatus === 'do_not_disturb' ? 'Do Not Disturb' : 
+                                     'Offline'}
+                                </span>
+                            </p>
                             {currentUser.bio && (
                                 <p className="mini-profile-bio"><strong>Bio:</strong> {currentUser.bio}</p>
                             )}
@@ -335,15 +343,19 @@ export function Dashboard() {
                                                 {(friend.name || 'U').charAt(0).toUpperCase()}
                                             </div>
                                         )}
-                                        {friend.isOnline && <span className="online-indicator"></span>}
+                                        {(friend.displayedStatus || 'offline') === 'online' && <span className="online-indicator"></span>}
+                                        {(friend.displayedStatus || 'offline') === 'do_not_disturb' && <span className="dnd-indicator"></span>}
                                     </div>
                                     <div className="friend-info">
                                         <p className="friend-name">{friend.name}</p>
                                         <p className="friend-username">@{friend.username}</p>
                                     </div>
                                     <div className="friend-badges">
-                                        {friend.isOnline && (
+                                        {(friend.displayedStatus || 'offline') === 'online' && (
                                             <span className="online-badge">Online</span>
+                                        )}
+                                        {(friend.displayedStatus || 'offline') === 'do_not_disturb' && (
+                                            <span className="dnd-badge">Do Not Disturb</span>
                                         )}
                                         {friend.unreadCount && friend.unreadCount > 0 && (
                                             <span className="unread-badge">
@@ -391,12 +403,18 @@ export function Dashboard() {
                                             {(selectedFriend.name || 'U').charAt(0).toUpperCase()}
                                         </div>
                                     )}
-                                    {selectedFriend.isOnline && <span className="online-indicator"></span>}
+                                    {selectedFriend.displayedStatus === 'online' && <span className="online-indicator"></span>}
+                                    {selectedFriend.displayedStatus === 'do_not_disturb' && <span className="dnd-indicator"></span>}
                                 </div>
                                 <div>
                                     <h3 className="chat-friend-name">{selectedFriend.name}</h3>
-                                    <p className="chat-friend-status">
-                                        {selectedFriend.isOnline ? 'Online' : 'Offline'}
+                                    <p className={`chat-friend-status status-${selectedFriend.displayedStatus || 'offline'}`}>
+                                        {(() => {
+                                            const status = selectedFriend.displayedStatus || 'offline';
+                                            if (status === 'online') return 'Online';
+                                            if (status === 'do_not_disturb') return 'Do Not Disturb';
+                                            return 'Offline';
+                                        })()}
                                     </p>
                                 </div>
                             </div>

@@ -80,6 +80,40 @@
     border-radius: 50%;
 }
 
+.dnd-indicator {
+    position: absolute;
+    bottom: 2px;
+    right: 2px;
+    width: 12px;
+    height: 12px;
+    background-color: #f59e0b;
+    border: 2px solid #e0e0e0;
+    border-radius: 50%;
+}
+
+/* Activity Indicator */
+.activity-indicator {
+    position: absolute;
+    bottom: 2px;
+    right: 2px;
+    width: 12px;
+    height: 12px;
+    border: 2px solid #e0e0e0;
+    border-radius: 50%;
+}
+
+.activity-indicator.online {
+    background-color: #25d366;
+}
+
+.activity-indicator.offline {
+    background-color: #999;
+}
+
+.activity-indicator.do_not_disturb {
+    background-color: #dc3545;
+}
+
 .mini-profile-info {
     flex: 1;
 }
@@ -135,6 +169,30 @@
     background-color: var(--softbackground);
     border-color: var(--whatsappgreen);
     color: var(--darkgreen);
+}
+
+/* Activity Status Badge */
+.activity-status-badge {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.activity-status-badge.online {
+    background-color: rgba(37, 211, 102, 0.1);
+    color: #25d366;
+}
+
+.activity-status-badge.offline {
+    background-color: rgba(153, 153, 153, 0.1);
+    color: #999;
+}
+
+.activity-status-badge.do_not_disturb {
+    background-color: rgba(220, 53, 69, 0.1);
+    color: #dc3545;
 }
 
 /* Sidebar Actions */
@@ -649,6 +707,12 @@
     font-weight: 600;
 }
 
+.dnd-badge {
+    font-size: 11px;
+    color: #f59e0b;
+    font-weight: 600;
+}
+
 .unread-badge {
     display: inline-flex;
     align-items: center;
@@ -841,8 +905,21 @@
 
 .chat-friend-status {
     font-size: 12px;
-    color: #999;
     margin: 4px 0 0 0;
+    font-weight: 500;
+}
+
+/* Status colors */
+.chat-friend-status.status-online {
+    color: #4ade80; /* Green */
+}
+
+.chat-friend-status.status-offline {
+    color: #999; /* Gray */
+}
+
+.chat-friend-status.status-do_not_disturb {
+    color: #f59e0b; /* Orange/Amber */
 }
 
 /* Messages Container */

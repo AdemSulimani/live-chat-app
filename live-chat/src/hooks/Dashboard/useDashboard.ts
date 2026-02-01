@@ -7,7 +7,9 @@ interface Friend {
     name: string;
     username: string;
     avatar: string;
-    isOnline: boolean;
+    isOnline: boolean; // Connection status (nëse është i lidhur me Socket.IO)
+    displayedStatus?: 'online' | 'offline' | 'do_not_disturb'; // Statusi që shfaqet për të tjerët
+    activityStatus?: 'online' | 'offline' | 'do_not_disturb'; // Preference e përdoruesit
     lastSeen?: string;
     unreadCount?: number;
 }
@@ -50,6 +52,7 @@ interface User {
     status: string;
     bio?: string;
     statusMessage?: string;
+    activityStatus?: 'online' | 'offline' | 'do_not_disturb';
 }
 
 export function useDashboard() {
@@ -87,7 +90,7 @@ export function useDashboard() {
     const chatContainerRef = useRef<HTMLDivElement>(null);
     const isInitialLoadRef = useRef<boolean>(false);
 
-    const { user, getToken } = useUser();
+    const { user, getToken, updateUser } = useUser();
     const { socket, isConnected } = useSocket();
     
     // Convert context user to Dashboard User format
@@ -98,7 +101,8 @@ export function useDashboard() {
         avatar: user.profilePhoto || '',
         status: 'Online',
         bio: user.bio,
-        statusMessage: user.statusMessage
+        statusMessage: user.statusMessage,
+        activityStatus: user.activityStatus || 'offline'
     } : {
         id: '',
         name: 'Guest',
@@ -107,6 +111,41 @@ export function useDashboard() {
         status: 'Offline',
         bio: '',
         statusMessage: ''
+    };
+
+    // ============================================
+    // HELPER: CALCULATE DISPLAYED STATUS
+    // ============================================
+    // Llogarit statusin që duhet të shfaqet për një mik bazuar në:
+    // 1. Nëse është online (isOnline)
+    // 2. Activity status preference (activityStatus)
+    const calculateDisplayedStatus = (
+        isOnline: boolean,
+        activityStatus?: 'online' | 'offline' | 'do_not_disturb'
+    ): 'online' | 'offline' | 'do_not_disturb' => {
+        // Nëse nuk është online (nuk është i lidhur me Socket.IO)
+        if (!isOnline) {
+            return 'offline';
+        }
+
+        // Nëse është online, kontrollo activity status preference
+        // Nëse ka vendosur 'offline' si preference, shfaq gjithmonë offline
+        if (activityStatus === 'offline') {
+            return 'offline';
+        }
+
+        // Nëse ka vendosur 'do_not_disturb', shfaq do_not_disturb
+        if (activityStatus === 'do_not_disturb') {
+            return 'do_not_disturb';
+        }
+
+        // Nëse ka vendosur 'online' ose nuk ka preference, shfaq online
+        if (activityStatus === 'online' || !activityStatus) {
+            return 'online';
+        }
+
+        // Default: offline
+        return 'offline';
     };
 
     // ============================================
@@ -191,10 +230,18 @@ export function useDashboard() {
 
                 if (friendsResponse.ok) {
                     const friendsData = await friendsResponse.json();
-                    const formattedFriends = (friendsData.friends || []).map((friend: any) => ({
-                        ...friend,
-                        timestamp: friend.timestamp ? new Date(friend.timestamp) : new Date(),
-                    }));
+                    const formattedFriends = (friendsData.friends || []).map((friend: any) => {
+                        // Llogarit displayedStatus bazuar në isOnline dhe activityStatus
+                        const displayedStatus = calculateDisplayedStatus(
+                            friend.isOnline || false,
+                            friend.activityStatus
+                        );
+                        return {
+                            ...friend,
+                            displayedStatus,
+                            timestamp: friend.timestamp ? new Date(friend.timestamp) : new Date(),
+                        };
+                    });
                     setFriends(formattedFriends);
                 } else if (friendsResponse.status === 401) {
                     // Unauthorized - token expired or invalid
@@ -253,6 +300,28 @@ export function useDashboard() {
                     const errorData = await notificationsResponse.json().catch(() => ({ message: 'Failed to load notifications' }));
                     console.error('Error loading notifications:', errorData.message);
                 }
+
+                // Load activity status
+                if (!user?.activityStatus) {
+                    try {
+                        const activityResponse = await fetch('http://localhost:5000/api/activity', {
+                            method: 'GET',
+                            headers: {
+                                'Authorization': `Bearer ${token}`,
+                                'Content-Type': 'application/json',
+                            },
+                        });
+
+                        if (activityResponse.ok) {
+                            const activityData = await activityResponse.json();
+                            const status = activityData.activityStatus || 'offline';
+                            updateUser({ activityStatus: status });
+                        }
+                    } catch (err) {
+                        // Silently fail - activity status is not critical
+                        console.log('Could not load activity status:', err);
+                    }
+                }
             } catch (error) {
                 console.error('Error loading dashboard data:', error);
                 // Network error or other unexpected errors
@@ -262,7 +331,7 @@ export function useDashboard() {
         };
 
         loadData();
-    }, [user, getToken]);
+    }, [user, getToken, updateUser]);
 
     // Listen to WebSocket events for real-time updates
     useEffect(() => {
@@ -309,8 +378,21 @@ export function useDashboard() {
                 ...prev
             ]);
 
-            // Update friends list
-            setFriends(data.friends);
+            // Update friends list - llogarit displayedStatus për çdo mik
+            // Backend mund të dërgojë displayedStatus, por llogarisim për siguri
+            const formattedFriends = (data.friends || []).map((friend: any) => {
+                // Nëse backend ka dërguar displayedStatus, përdor atë
+                // Përndryshe, llogarit bazuar në isOnline dhe activityStatus
+                const displayedStatus = friend.displayedStatus || calculateDisplayedStatus(
+                    friend.isOnline || false,
+                    friend.activityStatus
+                );
+                return {
+                    ...friend,
+                    displayedStatus,
+                };
+            });
+            setFriends(formattedFriends);
 
             // Remove friend request if it exists
             setFriendRequests(prev => prev.filter(r => r.fromUserId !== data.newFriend.id));
@@ -563,6 +645,42 @@ export function useDashboard() {
             }
         });
 
+        // ============================================
+        // LISTEN FOR USER STATUS CHANGED (REAL-TIME)
+        // ============================================
+        // Dëgjo për user_status_changed event - kur statusi i një miku ndryshon
+        // Kjo mund të ndodhë kur:
+        // - Miku lidhet/shkëputet (online/offline)
+        // - Miku ndryshon activity status preference
+        socket.on('user_status_changed', (data: any) => {
+            const { userId, displayedStatus } = data;
+            if (!userId || !displayedStatus) return;
+
+            // Përditëso displayedStatus për mikun në friends list
+            setFriends(prev => prev.map(friend => {
+                if (friend.id === userId) {
+                    // Përditëso displayedStatus dhe isOnline bazuar në displayedStatus
+                    const isOnline = displayedStatus !== 'offline';
+                    return {
+                        ...friend,
+                        displayedStatus,
+                        isOnline,
+                    };
+                }
+                return friend;
+            }));
+
+            // Nëse miku është i zgjedhur aktualisht, përditëso edhe selectedFriend
+            if (selectedFriend && selectedFriend.id === userId) {
+                const isOnline = displayedStatus !== 'offline';
+                setSelectedFriend(prev => prev ? {
+                    ...prev,
+                    displayedStatus,
+                    isOnline,
+                } : null);
+            }
+        });
+
         // Cleanup listeners on unmount
         return () => {
             socket.off('friend_request_received');
@@ -574,6 +692,7 @@ export function useDashboard() {
             socket.off('message_read');
             socket.off('message_edited');
             socket.off('message_deleted');
+            socket.off('user_status_changed');
         };
     }, [socket, selectedFriend, user]);
 
@@ -1018,18 +1137,102 @@ export function useDashboard() {
         }
     };
     
-    const handleFriendClick = (friend: Friend) => {
-        setSelectedFriend(friend);
-        // Rivendos numrin e mesazheve të palexuara kur shoku klikohet
-        setFriends(prev => prev.map(f => {
-            if (f.id === friend.id) {
-                return {
-                    ...f,
-                    unreadCount: 0,
+    const handleFriendClick = async (friend: Friend) => {
+        // ============================================
+        // OPTIMIZATION: CACHE STATUS AND FALLBACK
+        // ============================================
+        // Nëse Socket.IO është i lidhur, përdor statusin e cache-uar nga friends list
+        // Nëse Socket.IO nuk është i lidhur, merr statusin nga API
+        // Kjo garanton që statusi është i saktë edhe kur Socket.IO nuk është i disponueshëm
+        
+        // Përdor statusin e cache-uar nëse Socket.IO është i lidhur dhe friend ka displayedStatus
+        if (isConnected && socket && friend.displayedStatus) {
+            // Përdor statusin e cache-uar - nuk ka nevojë për API call
+            setSelectedFriend(friend);
+            // Rivendos numrin e mesazheve të palexuara
+            setFriends(prev => prev.map(f => {
+                if (f.id === friend.id) {
+                    return {
+                        ...f,
+                        unreadCount: 0,
+                    };
+                }
+                return f;
+            }));
+            return;
+        }
+
+        // Nëse Socket.IO nuk është i lidhur ose friend nuk ka displayedStatus, merr nga API
+        const token = getToken();
+        if (!token) {
+            // Nëse nuk ka token, përdor friend-in siç është
+            setSelectedFriend(friend);
+            setFriends(prev => prev.map(f => {
+                if (f.id === friend.id) {
+                    return { ...f, unreadCount: 0 };
+                }
+                return f;
+            }));
+            return;
+        }
+
+        // Merr statusin e shfaqur të mikut nga backend kur Socket.IO nuk është i lidhur
+        try {
+            const response = await fetch(`http://localhost:5000/api/friends/${friend.id}/status`, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                },
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                // Përditëso friend me statusin e saktë nga backend
+                const updatedFriend: Friend = {
+                    ...friend,
+                    isOnline: data.isOnline || false,
+                    activityStatus: data.activityStatus || 'offline',
+                    displayedStatus: data.displayedStatus || 'offline',
                 };
+                setSelectedFriend(updatedFriend);
+
+                // Përditëso edhe në friends list (cache)
+                setFriends(prev => prev.map(f => {
+                    if (f.id === friend.id) {
+                        return {
+                            ...f,
+                            isOnline: data.isOnline || false,
+                            displayedStatus: data.displayedStatus || 'offline',
+                            activityStatus: data.activityStatus || 'offline',
+                            unreadCount: 0, // Rivendos numrin e mesazheve të palexuara
+                        };
+                    }
+                    return f;
+                }));
+            } else {
+                // Nëse API dështon, përdor friend-in siç është (me displayedStatus të cache-uar ose default)
+                setSelectedFriend(friend);
+                // Rivendos numrin e mesazheve të palexuara
+                setFriends(prev => prev.map(f => {
+                    if (f.id === friend.id) {
+                        return { ...f, unreadCount: 0 };
+                    }
+                    return f;
+                }));
             }
-            return f;
-        }));
+        } catch (error) {
+            console.error('Error fetching friend status:', error);
+            // Nëse ka gabim, përdor friend-in siç është (me displayedStatus të cache-uar ose default)
+            setSelectedFriend(friend);
+            // Rivendos numrin e mesazheve të palexuara
+            setFriends(prev => prev.map(f => {
+                if (f.id === friend.id) {
+                    return { ...f, unreadCount: 0 };
+                }
+                return f;
+            }));
+        }
     };
     
     const handleBackToSidebar = () => {
@@ -1346,10 +1549,18 @@ export function useDashboard() {
 
             if (friendsResponse.ok) {
                 const friendsData = await friendsResponse.json();
-                const formattedFriends = (friendsData.friends || []).map((friend: any) => ({
-                    ...friend,
-                    timestamp: friend.timestamp ? new Date(friend.timestamp) : new Date(),
-                }));
+                const formattedFriends = (friendsData.friends || []).map((friend: any) => {
+                    // Llogarit displayedStatus bazuar në isOnline dhe activityStatus
+                    const displayedStatus = calculateDisplayedStatus(
+                        friend.isOnline || false,
+                        friend.activityStatus
+                    );
+                    return {
+                        ...friend,
+                        displayedStatus,
+                        timestamp: friend.timestamp ? new Date(friend.timestamp) : new Date(),
+                    };
+                });
                 setFriends(formattedFriends);
             }
 
