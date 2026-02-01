@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useUser } from '../../contexts/UserContext';
+import { API_URL } from '../../utils/apiConfig';
 
 export interface Friend {
     id: string;
@@ -27,7 +28,7 @@ export function useFriends() {
             }
 
             try {
-                const response = await fetch('http://localhost:5000/api/friends', {
+                const response = await fetch(`${API_URL}/api/friends`, {
                     method: 'GET',
                     headers: {
                         'Authorization': `Bearer ${token}`,
@@ -68,7 +69,7 @@ export function useFriends() {
         }
 
         try {
-            const response = await fetch(`http://localhost:5000/api/friends/remove/${friendId}`, {
+            const response = await fetch(`${API_URL}/api/friends/remove/${friendId}`, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -89,7 +90,7 @@ export function useFriends() {
             }
 
             // Refresh friends list
-            const friendsResponse = await fetch('http://localhost:5000/api/friends', {
+            const friendsResponse = await fetch(`${API_URL}/api/friends`, {
                 method: 'GET',
                 headers: {
                     'Authorization': `Bearer ${token}`,

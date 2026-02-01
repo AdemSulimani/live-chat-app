@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useUser } from '../../contexts/UserContext';
+import { API_URL } from '../../utils/apiConfig';
 
 export function useProfile() {
     const navigate = useNavigate();
@@ -127,7 +128,7 @@ export function useProfile() {
             if (!token) return false;
 
             setCheckingUsername(true);
-            const response = await fetch(`http://localhost:5000/api/profile/check-username/${username}`, {
+            const response = await fetch(`${API_URL}/api/profile/check-username/${username}`, {
                 method: 'GET',
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -225,7 +226,7 @@ export function useProfile() {
                 const photoFormData = new FormData();
                 photoFormData.append('photo', profileData.profilePhoto);
 
-                const photoResponse = await fetch('http://localhost:5000/api/profile/photo', {
+                const photoResponse = await fetch(`${API_URL}/api/profile/photo`, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${token}`,
@@ -245,7 +246,7 @@ export function useProfile() {
             }
 
             // Ruaj profilin (me ose pa foto)
-            const response = await fetch('http://localhost:5000/api/profile', {
+            const response = await fetch(`${API_URL}/api/profile`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

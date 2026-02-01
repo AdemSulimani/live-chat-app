@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useUser } from '../../contexts/UserContext';
+import { API_URL } from '../../utils/apiConfig';
 
 export interface BlockedUser {
     id: string;
@@ -24,7 +25,7 @@ export function useBlocked() {
             }
 
             try {
-                const response = await fetch('http://localhost:5000/api/blocked', {
+                const response = await fetch(`${API_URL}/api/blocked`, {
                     method: 'GET',
                     headers: {
                         'Authorization': `Bearer ${token}`,
@@ -65,7 +66,7 @@ export function useBlocked() {
         }
 
         try {
-            const response = await fetch(`http://localhost:5000/api/blocked/${userId}`, {
+            const response = await fetch(`${API_URL}/api/blocked/${userId}`, {
                 method: 'DELETE',
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -86,7 +87,7 @@ export function useBlocked() {
             }
 
             // Refresh blocked users list
-            const blockedResponse = await fetch('http://localhost:5000/api/blocked', {
+            const blockedResponse = await fetch(`${API_URL}/api/blocked`, {
                 method: 'GET',
                 headers: {
                     'Authorization': `Bearer ${token}`,

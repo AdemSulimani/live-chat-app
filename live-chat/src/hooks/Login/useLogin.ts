@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useUser } from '../../contexts/UserContext';
+import { API_URL } from '../../utils/apiConfig';
 
 interface UserData {
     id: string;
@@ -34,7 +35,7 @@ export function useLogin() {
 
         setLoading(true);
         try {
-            const response = await fetch('http://localhost:5000/api/auth/login', {
+            const response = await fetch(`${API_URL}/api/auth/login`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

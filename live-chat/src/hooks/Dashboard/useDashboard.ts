@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useUser } from '../../contexts/UserContext';
 import { useSocket } from '../../contexts/SocketContext';
+import { API_URL } from '../../utils/apiConfig';
 
 interface Friend {
     id: string;
@@ -230,7 +231,7 @@ export function useDashboard() {
 
             try {
                 // Load friends
-                const friendsResponse = await fetch('http://localhost:5000/api/friends', {
+                const friendsResponse = await fetch(`${API_URL}/api/friends`, {
                     method: 'GET',
                     headers: {
                         'Authorization': `Bearer ${token}`,
@@ -264,7 +265,7 @@ export function useDashboard() {
                 }
 
                 // Load friend requests
-                const requestsResponse = await fetch('http://localhost:5000/api/friend-requests', {
+                const requestsResponse = await fetch(`${API_URL}/api/friend-requests`, {
                     method: 'GET',
                     headers: {
                         'Authorization': `Bearer ${token}`,
@@ -289,7 +290,7 @@ export function useDashboard() {
                 }
 
                 // Load notifications
-                const notificationsResponse = await fetch('http://localhost:5000/api/notifications', {
+                const notificationsResponse = await fetch(`${API_URL}/api/notifications`, {
                     method: 'GET',
                     headers: {
                         'Authorization': `Bearer ${token}`,
@@ -315,7 +316,7 @@ export function useDashboard() {
                 // Load activity status
                 if (!user?.activityStatus) {
                     try {
-                        const activityResponse = await fetch('http://localhost:5000/api/activity', {
+                        const activityResponse = await fetch(`${API_URL}/api/activity`, {
                             method: 'GET',
                             headers: {
                                 'Authorization': `Bearer ${token}`,
@@ -890,7 +891,7 @@ export function useDashboard() {
                 if (!token) return;
 
                 try {
-                    const response = await fetch(`http://localhost:5000/api/notifications/read-by-user/${selectedFriend.id}`, {
+                    const response = await fetch(`${API_URL}/api/notifications/read-by-user/${selectedFriend.id}`, {
                         method: 'PUT',
                         headers: {
                             'Authorization': `Bearer ${token}`,
@@ -1156,7 +1157,7 @@ export function useDashboard() {
                 // Merr mesazhet e ruajtura nga databaza midis përdoruesit aktual dhe shokut të zgjedhur
                 // Kjo funksionon edhe pas refresh - mesazhet janë të ruajtura në databazë
                 // Pagination: default page 1, limit 50 mesazhe
-                const response = await fetch(`http://localhost:5000/api/messages/${selectedFriend.id}?page=1&limit=50`, {
+                const response = await fetch(`${API_URL}/api/messages/${selectedFriend.id}?page=1&limit=50`, {
                     method: 'GET',
                     headers: {
                         'Authorization': `Bearer ${token}`,
@@ -1300,7 +1301,7 @@ export function useDashboard() {
         setLoadingMoreMessages(true);
         try {
             const nextPage = currentPage + 1;
-            const response = await fetch(`http://localhost:5000/api/messages/${selectedFriend.id}?page=${nextPage}&limit=50`, {
+            const response = await fetch(`${API_URL}/api/messages/${selectedFriend.id}?page=${nextPage}&limit=50`, {
                 method: 'GET',
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -1386,7 +1387,7 @@ export function useDashboard() {
 
         // Merr statusin e shfaqur të mikut nga backend kur Socket.IO nuk është i lidhur
         try {
-            const response = await fetch(`http://localhost:5000/api/friends/${friend.id}/status`, {
+            const response = await fetch(`${API_URL}/api/friends/${friend.id}/status`, {
                 method: 'GET',
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -1594,7 +1595,7 @@ export function useDashboard() {
             const isEmail = searchInput.includes('@');
             
             const findUserResponse = await fetch(
-                `http://localhost:5000/api/users/find?${isEmail ? 'email' : 'username'}=${encodeURIComponent(searchInput)}`,
+                `${API_URL}/api/users/find?${isEmail ? 'email' : 'username'}=${encodeURIComponent(searchInput)}`,
                 {
                     method: 'GET',
                     headers: {
@@ -1624,7 +1625,7 @@ export function useDashboard() {
             const targetUserId = findUserData.user.id;
 
             // Now send friend request
-            const response = await fetch('http://localhost:5000/api/friend-requests/send', {
+            const response = await fetch(`${API_URL}/api/friend-requests/send`, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -1654,14 +1655,14 @@ export function useDashboard() {
 
             // Refresh friend requests and notifications
             const [requestsResponse, notificationsResponse] = await Promise.all([
-                fetch('http://localhost:5000/api/friend-requests', {
+                fetch(`${API_URL}/api/friend-requests`, {
                     method: 'GET',
                     headers: {
                         'Authorization': `Bearer ${token}`,
                         'Content-Type': 'application/json',
                     },
                 }),
-                fetch('http://localhost:5000/api/notifications', {
+                fetch(`${API_URL}/api/notifications`, {
                     method: 'GET',
                     headers: {
                         'Authorization': `Bearer ${token}`,
@@ -1708,7 +1709,7 @@ export function useDashboard() {
         }
 
         try {
-            const response = await fetch(`http://localhost:5000/api/friend-requests/accept/${requestId}`, {
+            const response = await fetch(`${API_URL}/api/friend-requests/accept/${requestId}`, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -1732,21 +1733,21 @@ export function useDashboard() {
 
             // Refresh friends, friend requests, and notifications
             const [friendsResponse, requestsResponse, notificationsResponse] = await Promise.all([
-                fetch('http://localhost:5000/api/friends', {
+                fetch(`${API_URL}/api/friends`, {
                     method: 'GET',
                     headers: {
                         'Authorization': `Bearer ${token}`,
                         'Content-Type': 'application/json',
                     },
                 }),
-                fetch('http://localhost:5000/api/friend-requests', {
+                fetch(`${API_URL}/api/friend-requests`, {
                     method: 'GET',
                     headers: {
                         'Authorization': `Bearer ${token}`,
                         'Content-Type': 'application/json',
                     },
                 }),
-                fetch('http://localhost:5000/api/notifications', {
+                fetch(`${API_URL}/api/notifications`, {
                     method: 'GET',
                     headers: {
                         'Authorization': `Bearer ${token}`,
@@ -1813,7 +1814,7 @@ export function useDashboard() {
         }
 
         try {
-            const response = await fetch(`http://localhost:5000/api/friend-requests/reject/${requestId}`, {
+            const response = await fetch(`${API_URL}/api/friend-requests/reject/${requestId}`, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -1837,14 +1838,14 @@ export function useDashboard() {
 
             // Refresh friend requests and notifications
             const [requestsResponse, notificationsResponse] = await Promise.all([
-                fetch('http://localhost:5000/api/friend-requests', {
+                fetch(`${API_URL}/api/friend-requests`, {
                     method: 'GET',
                     headers: {
                         'Authorization': `Bearer ${token}`,
                         'Content-Type': 'application/json',
                     },
                 }),
-                fetch('http://localhost:5000/api/notifications', {
+                fetch(`${API_URL}/api/notifications`, {
                     method: 'GET',
                     headers: {
                         'Authorization': `Bearer ${token}`,
@@ -1884,7 +1885,7 @@ export function useDashboard() {
         }
 
         try {
-            const response = await fetch(`http://localhost:5000/api/notifications/${notificationId}/read`, {
+            const response = await fetch(`${API_URL}/api/notifications/${notificationId}/read`, {
                 method: 'PUT',
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -1919,7 +1920,7 @@ export function useDashboard() {
         }
 
         try {
-            const response = await fetch('http://localhost:5000/api/notifications/read-all', {
+            const response = await fetch(`${API_URL}/api/notifications/read-all`, {
                 method: 'PUT',
                 headers: {
                     'Authorization': `Bearer ${token}`,

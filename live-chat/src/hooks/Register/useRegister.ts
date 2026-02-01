@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useUser } from '../../contexts/UserContext';
+import { API_URL } from '../../utils/apiConfig';
 
 const countries = [
     'Albania', 'Kosovo', 'United States', 'United Kingdom', 'Germany', 'France',
@@ -37,7 +38,7 @@ export function useRegister() {
 
         setLoading(true);
         try {
-            const response = await fetch('http://localhost:5000/api/auth/register', {
+            const response = await fetch(`${API_URL}/api/auth/register`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

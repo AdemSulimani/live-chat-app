@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useUser } from '../../contexts/UserContext';
+import { API_URL } from '../../utils/apiConfig';
 
 interface ProfileData {
     name: string;
@@ -56,7 +57,7 @@ export function useProfileFull() {
                     return;
                 }
 
-                const response = await fetch('http://localhost:5000/api/profile', {
+                const response = await fetch(`${API_URL}/api/profile`, {
                     method: 'GET',
                     headers: {
                         'Authorization': `Bearer ${token}`,
@@ -102,7 +103,7 @@ export function useProfileFull() {
 
                 // Load activity status separately
                 try {
-                    const activityResponse = await fetch('http://localhost:5000/api/activity', {
+                    const activityResponse = await fetch(`${API_URL}/api/activity`, {
                         method: 'GET',
                         headers: {
                             'Authorization': `Bearer ${token}`,
@@ -183,7 +184,7 @@ export function useProfileFull() {
                 const photoFormData = new FormData();
                 photoFormData.append('photo', file);
 
-                const photoResponse = await fetch('http://localhost:5000/api/profile/photo', {
+                const photoResponse = await fetch(`${API_URL}/api/profile/photo`, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${token}`,
@@ -276,7 +277,7 @@ export function useProfileFull() {
             const token = getToken();
             if (!token) return false;
 
-            const response = await fetch(`http://localhost:5000/api/profile/check-username/${username}`, {
+            const response = await fetch(`${API_URL}/api/profile/check-username/${username}`, {
                 method: 'GET',
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -340,7 +341,7 @@ export function useProfileFull() {
             }
 
             // Dërgo PUT request për të përditësuar profilin
-            const response = await fetch('http://localhost:5000/api/profile', {
+            const response = await fetch(`${API_URL}/api/profile`, {
                 method: 'POST', // Backend përdor POST për create/update
                 headers: {
                     'Content-Type': 'application/json',
@@ -451,7 +452,7 @@ export function useProfileFull() {
                 return;
             }
 
-            const response = await fetch('http://localhost:5000/api/activity', {
+            const response = await fetch(`${API_URL}/api/activity`, {
                 method: 'PUT',
                 headers: {
                     'Authorization': `Bearer ${token}`,

@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { useUser } from './UserContext';
+import { API_URL } from '../utils/apiConfig';
 
 interface SocketContextType {
   socket: Socket | null;
@@ -25,7 +26,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     }
 
     // Initialize socket connection with auto-reconnect
-    const newSocket = io('http://localhost:5000', {
+    const newSocket = io(API_URL, {
       auth: {
         token: token,
       },

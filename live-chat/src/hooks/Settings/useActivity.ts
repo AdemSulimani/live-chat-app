@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useUser } from '../../contexts/UserContext';
+import { API_URL } from '../../utils/apiConfig';
 
 export type ActivityStatus = 'online' | 'offline' | 'do_not_disturb';
 
@@ -18,7 +19,7 @@ export function useActivity() {
 
             setLoading(true);
             try {
-                const response = await fetch('http://localhost:5000/api/activity', {
+                const response = await fetch(`${API_URL}/api/activity`, {
                     method: 'GET',
                     headers: {
                         'Authorization': `Bearer ${token}`,
@@ -62,7 +63,7 @@ export function useActivity() {
         setError(null);
 
         try {
-            const response = await fetch('http://localhost:5000/api/activity', {
+            const response = await fetch(`${API_URL}/api/activity`, {
                 method: 'PUT',
                 headers: {
                     'Authorization': `Bearer ${token}`,
