@@ -22,6 +22,14 @@ const messageSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    readAt: {
+      type: Date,
+      default: null, // Koha kur mesazhi u lexua
+    },
+    deliveredAt: {
+      type: Date,
+      default: null, // Koha kur mesazhi u dorëzua
+    },
     isEdited: {
       type: Boolean,
       default: false,

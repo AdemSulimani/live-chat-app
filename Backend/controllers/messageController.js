@@ -80,6 +80,29 @@ const getMessages = async (req, res) => {
       .skip(skip)
       .lean();
 
+    // Set deliveredAt for messages received by current user that don't have it yet
+    const deliveredAt = new Date();
+    const messagesToUpdate = messages.filter(
+      (msg) => 
+        msg.receiverId._id.toString() === currentUserId && 
+        !msg.deliveredAt
+    );
+
+    if (messagesToUpdate.length > 0) {
+      const messageIds = messagesToUpdate.map((msg) => msg._id);
+      await Message.updateMany(
+        { _id: { $in: messageIds } },
+        { $set: { deliveredAt: deliveredAt } }
+      );
+      
+      // Update messages array with deliveredAt
+      messages.forEach((msg) => {
+        if (messageIds.some((id) => id.toString() === msg._id.toString())) {
+          msg.deliveredAt = deliveredAt;
+        }
+      });
+    }
+
     // Get total count for pagination
     const totalMessages = await Message.countDocuments({
       $or: [
@@ -98,6 +121,8 @@ const getMessages = async (req, res) => {
         content: message.content,
         timestamp: message.createdAt,
         isRead: message.isRead,
+        readAt: message.readAt || null,
+        deliveredAt: message.deliveredAt || null,
       }));
 
     return res.status(200).json({
@@ -195,6 +220,11 @@ const sendMessage = async (req, res) => {
     await savedMessage.populate('senderId', 'name displayName username profilePhoto');
     await savedMessage.populate('receiverId', 'name displayName username profilePhoto');
 
+    // Check if receiver is online (for deliveredAt)
+    // Note: This requires access to activeUsers from socketServer
+    // For now, we'll set deliveredAt when receiver fetches messages (in getMessages)
+    // If receiver is online, deliveredAt will be set via socket handler
+    
     // Format message for response
     const formattedMessage = {
       id: savedMessage._id.toString(),
@@ -203,6 +233,8 @@ const sendMessage = async (req, res) => {
       content: savedMessage.content,
       timestamp: savedMessage.createdAt,
       isRead: savedMessage.isRead,
+      deliveredAt: savedMessage.deliveredAt || null,
+      readAt: savedMessage.readAt || null,
     };
 
     // ============================================
@@ -278,7 +310,18 @@ const markAsRead = async (req, res) => {
       return res.status(403).json({ message: 'You can only mark messages from friends as read' });
     }
 
-    // Mark all unread messages from this friend as read
+    // Privacy check: Mark messages as read ONLY if lastSeenEnabled is true
+    // Nëse lastSeenEnabled = false, mesazhet NUK shënohen si të lexuara (privacy)
+    if (currentUser.lastSeenEnabled === false) {
+      return res.status(200).json({
+        message: 'Messages cannot be marked as read when last seen is disabled',
+        count: 0,
+      });
+    }
+
+    const readAt = new Date();
+
+    // Mark all unread messages from this friend as read and set readAt
     const result = await Message.updateMany(
       {
         senderId: friendId,
@@ -286,9 +329,18 @@ const markAsRead = async (req, res) => {
         isRead: false,
       },
       {
-        $set: { isRead: true },
+        $set: { 
+          isRead: true,
+          readAt: readAt,
+        },
       }
     );
+
+    // Update lastSeenAt for the current user (only if lastSeenEnabled is true)
+    if (currentUser.lastSeenEnabled !== false) {
+      currentUser.lastSeenAt = readAt;
+      await currentUser.save();
+    }
 
     return res.status(200).json({
       message: 'Messages marked as read successfully',
@@ -300,9 +352,85 @@ const markAsRead = async (req, res) => {
   }
 };
 
+// @desc    Mark a specific message as read
+// @route   PUT /api/messages/:messageId/read
+// @access  Private
+const markMessageAsRead = async (req, res) => {
+  try {
+    const { messageId } = req.params;
+
+    if (!messageId) {
+      return res.status(400).json({ message: 'Message ID is required' });
+    }
+
+    // Verify current user exists
+    if (!req.user || !req.user._id) {
+      return res.status(401).json({ message: 'User not authenticated' });
+    }
+
+    const currentUserId = req.user._id.toString();
+
+    // Find the message
+    const message = await Message.findById(messageId);
+    if (!message) {
+      return res.status(404).json({ message: 'Message not found' });
+    }
+
+    // Verify that current user is the receiver of the message
+    if (message.receiverId.toString() !== currentUserId) {
+      return res.status(403).json({ message: 'You can only mark your own received messages as read' });
+    }
+
+    // Check if message is already read
+    if (message.isRead) {
+      return res.status(200).json({
+        message: 'Message is already marked as read',
+        readAt: message.readAt,
+      });
+    }
+
+    // Get current user to check lastSeenEnabled
+    const currentUser = await User.findById(currentUserId);
+    if (!currentUser) {
+      return res.status(404).json({ message: 'Current user not found' });
+    }
+
+    // Privacy check: Mark message as read ONLY if lastSeenEnabled is true
+    // Nëse lastSeenEnabled = false, mesazhi NUK shënohet si i lexuar (privacy)
+    if (currentUser.lastSeenEnabled === false) {
+      return res.status(200).json({
+        message: 'Message cannot be marked as read when last seen is disabled',
+        readAt: null,
+      });
+    }
+
+    const readAt = new Date();
+
+    // Mark message as read and set readAt timestamp
+    message.isRead = true;
+    message.readAt = readAt;
+    await message.save();
+
+    // Update lastSeenAt for the current user (only if lastSeenEnabled is true)
+    if (currentUser.lastSeenEnabled !== false) {
+      currentUser.lastSeenAt = readAt;
+      await currentUser.save();
+    }
+
+    return res.status(200).json({
+      message: 'Message marked as read successfully',
+      readAt: readAt,
+    });
+  } catch (error) {
+    console.error('Mark message as read error:', error);
+    return res.status(500).json({ message: 'Server error' });
+  }
+};
+
 module.exports = {
   getMessages,
   sendMessage,
   markAsRead,
+  markMessageAsRead,
 };
 

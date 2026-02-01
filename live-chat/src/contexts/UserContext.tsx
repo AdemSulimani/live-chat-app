@@ -12,6 +12,8 @@ interface UserData {
     profilePhoto?: string | null;
     profileCompleted: boolean;
     activityStatus?: 'online' | 'offline' | 'do_not_disturb';
+    lastSeenEnabled?: boolean; // Nëse përdoruesi lejon last seen
+    lastSeenAt?: string; // Koha e fundit kur përdoruesi ka lexuar mesazhe (si string nga API)
     createdAt?: string;
 }
 

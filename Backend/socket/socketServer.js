@@ -421,14 +421,29 @@ const initializeSocket = (server) => {
         // ============================================
         // Kontrollo nëse marrësi është online duke kontrolluar activeUsers Map
         if (activeUsers.has(receiverId)) {
-          // Marrësi është online - dërgo mesazhin real-time përmes Socket Room
-          // io.to(`user:${receiverId}`) dërgon mesazhin vetëm te përdoruesi në atë room
+          // Marrësi është online - vendos deliveredAt dhe dërgo mesazhin real-time
+          const deliveredAt = new Date();
+          savedMessage.deliveredAt = deliveredAt;
+          await savedMessage.save();
+          
+          // Përditëso formattedMessage me deliveredAt
+          formattedMessage.deliveredAt = deliveredAt;
+          
+          // Dërgo mesazhin real-time përmes Socket Room
           io.to(`user:${receiverId}`).emit('new_message', {
             message: formattedMessage,
           });
+          
+          // Dërgo message_delivered event te dërguesi
+          if (activeUsers.has(senderId)) {
+            io.to(`user:${senderId}`).emit('message_delivered', {
+              messageId: savedMessage._id.toString(),
+              deliveredAt: deliveredAt,
+            });
+          }
         }
         // Nëse marrësi është offline, mesazhi është tashmë i ruajtur në DB
-        // dhe do të merret automatikisht kur përdoruesi të kthehet online dhe të bëjë fetch mesazheve
+        // deliveredAt do të vendoset kur përdoruesi të bëjë fetch mesazheve (në getMessages)
 
       } catch (error) {
         console.error('Send message via socket error:', error);
@@ -457,16 +472,65 @@ const initializeSocket = (server) => {
           return; // Not authorized
         }
 
-        // Mark message as read
+        // Get receiver user to check lastSeenEnabled and update lastSeenAt
+        const receiver = await User.findById(userId);
+        if (!receiver) {
+          return;
+        }
+
+        // Privacy check: Mark message as read ONLY if lastSeenEnabled is true
+        // Nëse lastSeenEnabled = false, mesazhi NUK shënohet si i lexuar (privacy)
+        if (receiver.lastSeenEnabled === false) {
+          // Nëse last seen është i fikur, mos shëno mesazhin si të lexuar
+          return;
+        }
+
+        const readAt = new Date();
+
+        // Mark message as read and set readAt timestamp
         message.isRead = true;
+        message.readAt = readAt;
         await message.save();
 
-        // Notify sender that message was read
-        if (activeUsers.has(message.senderId.toString())) {
-          io.to(`user:${message.senderId.toString()}`).emit('message_read', {
-            messageId: messageId,
-            readBy: userId,
+        // Update lastSeenAt for the receiver (only if lastSeenEnabled is true)
+        if (receiver.lastSeenEnabled !== false) {
+          receiver.lastSeenAt = readAt;
+          await receiver.save();
+          
+          // Dërgo last_seen_updated event te miqtë që janë online dhe kanë lastSeenEnabled = true
+          // Kjo lejon që miqtë të shohin përditësimin e last seen në real-time
+          const userWithFriends = await User.findById(receiver._id).select('friends').populate({
+            path: 'friends',
+            select: '_id lastSeenEnabled',
           });
+          
+          if (userWithFriends && userWithFriends.friends) {
+            userWithFriends.friends.forEach((friend) => {
+              const friendId = friend._id.toString();
+              // Dërgo vetëm nëse friend-i është online dhe ka lastSeenEnabled = true
+              if (activeUsers.has(friendId) && friend.lastSeenEnabled !== false) {
+                io.to(`user:${friendId}`).emit('last_seen_updated', {
+                  userId: userId,
+                  lastSeenAt: receiver.lastSeenAt,
+                });
+              }
+            });
+          }
+        }
+
+        // Notify sender that message was read (only if BOTH users have lastSeenEnabled = true)
+        // Reciprocitet: Nëse njëri ka turn off last seen, asnjëri nuk duhet të shohë read receipts
+        if (receiver.lastSeenEnabled !== false && activeUsers.has(message.senderId.toString())) {
+          // Kontrollo edhe nëse sender-i ka lastSeenEnabled = true
+          const sender = await User.findById(message.senderId).select('lastSeenEnabled');
+          if (sender && sender.lastSeenEnabled !== false) {
+            io.to(`user:${message.senderId.toString()}`).emit('message_seen', {
+              messageId: messageId,
+              readBy: userId,
+              readAt: readAt,
+              lastSeenAt: receiver.lastSeenAt,
+            });
+          }
         }
 
       } catch (error) {
@@ -913,6 +977,55 @@ const initializeSocket = (server) => {
         console.error('Delete message via socket error:', error);
         socket.emit('message_delete_error', { 
           message: 'Server error while deleting message' 
+        });
+      }
+    });
+
+    // ============================================
+    // HANDLE LAST SEEN SETTING CHANGED
+    // ============================================
+    // Kur përdoruesi ndryshon lastSeenEnabled setting, njofto miqtë
+    socket.on('last_seen_setting_changed', async (data) => {
+      try {
+        const { userId, lastSeenEnabled } = data;
+
+        // Validation
+        if (!userId || typeof lastSeenEnabled !== 'boolean') {
+          socket.emit('last_seen_setting_error', { 
+            message: 'Invalid data: userId and lastSeenEnabled (boolean) are required' 
+          });
+          return;
+        }
+
+        // Verifikoj që userId përputhet me socket.userId
+        if (userId !== socket.userId) {
+          socket.emit('last_seen_setting_error', { 
+            message: 'Unauthorized: userId does not match authenticated user' 
+          });
+          return;
+        }
+
+        // Merr përdoruesin dhe miqtë e tij
+        const user = await User.findById(userId).select('friends');
+        if (!user || !user.friends || user.friends.length === 0) {
+          return;
+        }
+
+        // Njofto të gjithë miqtë që janë online
+        user.friends.forEach((friendId) => {
+          const friendIdStr = friendId.toString();
+          // Nëse miku është online, dërgo njoftim
+          if (activeUsers.has(friendIdStr)) {
+            io.to(`user:${friendIdStr}`).emit('last_seen_setting_updated', {
+              userId: userId,
+              lastSeenEnabled: lastSeenEnabled,
+            });
+          }
+        });
+      } catch (error) {
+        console.error('Error handling last_seen_setting_changed:', error);
+        socket.emit('last_seen_setting_error', { 
+          message: 'Server error while updating last seen setting' 
         });
       }
     });

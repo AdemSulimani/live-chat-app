@@ -14,7 +14,7 @@ const getFriends = async (req, res) => {
     }
 
     const user = await User.findById(req.user._id)
-      .populate('friends', 'name displayName username profilePhoto activityStatus')
+      .populate('friends', 'name displayName username profilePhoto activityStatus lastSeenEnabled lastSeenAt')
       .select('friends');
 
     if (!user) {
@@ -39,6 +39,15 @@ const getFriends = async (req, res) => {
         // Calculate displayed status based on online status and activity preference
         const displayedStatus = await getDisplayedStatusForUser(friendIdStr);
 
+        // Get current user to check lastSeenEnabled
+        const currentUser = await User.findById(req.user._id).select('lastSeenEnabled');
+        
+        // Privacy check: lastSeenAt dhe lastSeenEnabled shfaqen vetëm nëse:
+        // 1. Friend-i ka lastSeenEnabled = true
+        // 2. Current user ka lastSeenEnabled = true (reciprocitet)
+        const showLastSeen = friend.lastSeenEnabled !== false && 
+                            currentUser?.lastSeenEnabled !== false;
+
         return {
           id: friendIdStr,
           name: friend.displayName || friend.name,
@@ -47,6 +56,8 @@ const getFriends = async (req, res) => {
           isOnline: isOnline,
           activityStatus: friend.activityStatus || 'offline',
           displayedStatus: displayedStatus,
+          lastSeenEnabled: friend.lastSeenEnabled !== false,
+          lastSeenAt: showLastSeen && friend.lastSeenAt ? friend.lastSeenAt : null,
           unreadCount: unreadCount,
         };
       })
@@ -137,13 +148,13 @@ const getFriendStatus = async (req, res) => {
     }
 
     // Check if friend exists
-    const friend = await User.findById(friendId).select('activityStatus');
+    const friend = await User.findById(friendId).select('activityStatus lastSeenEnabled lastSeenAt');
     if (!friend) {
       return res.status(404).json({ message: 'Friend not found' });
     }
 
     // Check if they are actually friends
-    const user = await User.findById(req.user._id);
+    const user = await User.findById(req.user._id).select('lastSeenEnabled');
     if (!user) {
       return res.status(404).json({ message: 'Current user not found' });
     }
@@ -158,14 +169,60 @@ const getFriendStatus = async (req, res) => {
     // Calculate displayed status based on online status and activity preference
     const displayedStatus = await getDisplayedStatusForUser(friendId);
 
+    // Privacy check: lastSeenAt shfaqet vetëm nëse:
+    // 1. Friend-i ka lastSeenEnabled = true
+    // 2. Current user ka lastSeenEnabled = true (reciprocitet)
+    const showLastSeen = friend.lastSeenEnabled !== false && 
+                        user.lastSeenEnabled !== false;
+
     return res.status(200).json({
       message: 'Friend status retrieved successfully',
       isOnline: isOnline,
       activityStatus: friend.activityStatus || 'offline',
       displayedStatus: displayedStatus,
+      lastSeenEnabled: friend.lastSeenEnabled !== false,
+      lastSeenAt: showLastSeen && friend.lastSeenAt ? friend.lastSeenAt : null,
     });
   } catch (error) {
     console.error('Get friend status error:', error);
+    return res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// @desc    Update last seen enabled setting
+// @route   PUT /api/friends/last-seen
+// @access  Private
+const updateLastSeenEnabled = async (req, res) => {
+  try {
+    const { lastSeenEnabled } = req.body;
+
+    // Verify current user exists
+    if (!req.user || !req.user._id) {
+      return res.status(401).json({ message: 'User not authenticated' });
+    }
+
+    // Validate input
+    if (typeof lastSeenEnabled !== 'boolean') {
+      return res.status(400).json({ message: 'lastSeenEnabled must be a boolean' });
+    }
+
+    // Update user's lastSeenEnabled setting
+    const user = await User.findByIdAndUpdate(
+      req.user._id,
+      { lastSeenEnabled: lastSeenEnabled },
+      { new: true }
+    ).select('lastSeenEnabled');
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    return res.status(200).json({
+      message: 'Last seen setting updated successfully',
+      lastSeenEnabled: user.lastSeenEnabled,
+    });
+  } catch (error) {
+    console.error('Update last seen enabled error:', error);
     return res.status(500).json({ message: 'Server error' });
   }
 };
@@ -174,5 +231,6 @@ module.exports = {
   getFriends,
   removeFriend,
   getFriendStatus,
+  updateLastSeenEnabled,
 };
 
