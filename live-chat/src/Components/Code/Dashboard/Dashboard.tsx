@@ -69,8 +69,8 @@ export function Dashboard() {
         handleDeleteMessage,
         // Message status helper
         getMessageStatus,
-        // Last seen formatter
-        formatLastSeen
+        // Helper functions
+        formatLastSeenTime
     } = useDashboard();
 
     const moreOptionsRef = useRef<HTMLDivElement>(null);
@@ -412,27 +412,10 @@ export function Dashboard() {
                                 </div>
                                 <div>
                                     <h3 className="chat-friend-name">{selectedFriend.name}</h3>
-                                    <p className={`chat-friend-status status-${selectedFriend.displayedStatus || 'offline'}`}>
-                                        {(() => {
-                                            const status = selectedFriend.displayedStatus || 'offline';
-                                            if (status === 'online') return 'Online';
-                                            if (status === 'do_not_disturb') return 'Do Not Disturb';
-                                            
-                                            // Nëse është offline, shfaq last seen nëse është e disponueshme
-                                            const lastSeenText = formatLastSeen(
-                                                selectedFriend.lastSeenAt,
-                                                selectedFriend.lastSeenEnabled,
-                                                currentUser.lastSeenEnabled
-                                            );
-                                            
-                                            // Nëse ka last seen text (përfshirë "Last seen unavailable"), shfaq atë
-                                            if (lastSeenText) {
-                                                return lastSeenText;
-                                            }
-                                            
-                                            // Nëse nuk ka last seen text (null), shfaq "Offline"
-                                            return 'Offline';
-                                        })()}
+                                    <p className="chat-friend-status">
+                                        {selectedFriend.lastSeenAt 
+                                            ? `Last seen ${formatLastSeenTime(selectedFriend.lastSeenAt)}`
+                                            : 'Last seen recently'}
                                     </p>
                                 </div>
                             </div>
@@ -674,13 +657,13 @@ export function Dashboard() {
                                                                             </span>
                                                                             {message.isEdited && (
                                                                                 <span className="message-edited-indicator">
-                                                                                    Message was edited
+                                                                                    {isOwnMessage ? 'edited' : 'Message was edited'}
                                                                                 </span>
                                                                             )}
                                                                             {/* Message Status (Delivered/Seen) - Updates real-time via Socket.IO events */}
-                                                                            {isOwnMessage && getMessageStatus(message, selectedFriend?.lastSeenEnabled, currentUser?.lastSeenEnabled) && (
+                                                                            {isOwnMessage && getMessageStatus(message) && (
                                                                                 <span className="message-status">
-                                                                                    {getMessageStatus(message, selectedFriend?.lastSeenEnabled, currentUser?.lastSeenEnabled)}
+                                                                                    {getMessageStatus(message)}
                                                                                 </span>
                                                                             )}
                                                                         </div>

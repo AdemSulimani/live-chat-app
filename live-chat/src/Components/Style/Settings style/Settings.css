@@ -19,6 +19,41 @@
     justify-content: space-between;
 }
 
+/* Back Arrow to Dashboard */
+.settings-back-arrow {
+    padding: 20px 20px 10px 20px;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.back-to-dashboard-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    background-color: var(--white);
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    cursor: pointer;
+    color: var(--black);
+    transition: all 0.3s ease;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.back-to-dashboard-btn:hover {
+    background: linear-gradient(135deg, rgba(37, 211, 102, 0.1) 0%, rgba(18, 140, 126, 0.1) 100%);
+    border-color: var(--whatsappgreen);
+    color: var(--darkgreen);
+    transform: translateX(-3px);
+    box-shadow: 0 3px 8px rgba(37, 211, 102, 0.15);
+}
+
+.back-to-dashboard-btn svg {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+}
+
 /* Settings Sections */
 .settings-sections {
     padding: 20px;

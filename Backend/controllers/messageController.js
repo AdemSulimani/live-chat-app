@@ -123,6 +123,10 @@ const getMessages = async (req, res) => {
         isRead: message.isRead,
         readAt: message.readAt || null,
         deliveredAt: message.deliveredAt || null,
+        isEdited: message.isEdited || false,
+        editedAt: message.editedAt || null,
+        isDeleted: message.isDeleted || false,
+        deletedAt: message.deletedAt || null,
       }));
 
     return res.status(200).json({
@@ -310,15 +314,6 @@ const markAsRead = async (req, res) => {
       return res.status(403).json({ message: 'You can only mark messages from friends as read' });
     }
 
-    // Privacy check: Mark messages as read ONLY if lastSeenEnabled is true
-    // Nëse lastSeenEnabled = false, mesazhet NUK shënohen si të lexuara (privacy)
-    if (currentUser.lastSeenEnabled === false) {
-      return res.status(200).json({
-        message: 'Messages cannot be marked as read when last seen is disabled',
-        count: 0,
-      });
-    }
-
     const readAt = new Date();
 
     // Mark all unread messages from this friend as read and set readAt
@@ -336,11 +331,9 @@ const markAsRead = async (req, res) => {
       }
     );
 
-    // Update lastSeenAt for the current user (only if lastSeenEnabled is true)
-    if (currentUser.lastSeenEnabled !== false) {
-      currentUser.lastSeenAt = readAt;
-      await currentUser.save();
-    }
+    // Update lastSeenAt for the current user
+    currentUser.lastSeenAt = readAt;
+    await currentUser.save();
 
     return res.status(200).json({
       message: 'Messages marked as read successfully',
@@ -389,19 +382,10 @@ const markMessageAsRead = async (req, res) => {
       });
     }
 
-    // Get current user to check lastSeenEnabled
+    // Get current user to update lastSeenAt
     const currentUser = await User.findById(currentUserId);
     if (!currentUser) {
       return res.status(404).json({ message: 'Current user not found' });
-    }
-
-    // Privacy check: Mark message as read ONLY if lastSeenEnabled is true
-    // Nëse lastSeenEnabled = false, mesazhi NUK shënohet si i lexuar (privacy)
-    if (currentUser.lastSeenEnabled === false) {
-      return res.status(200).json({
-        message: 'Message cannot be marked as read when last seen is disabled',
-        readAt: null,
-      });
     }
 
     const readAt = new Date();
@@ -411,11 +395,9 @@ const markMessageAsRead = async (req, res) => {
     message.readAt = readAt;
     await message.save();
 
-    // Update lastSeenAt for the current user (only if lastSeenEnabled is true)
-    if (currentUser.lastSeenEnabled !== false) {
-      currentUser.lastSeenAt = readAt;
-      await currentUser.save();
-    }
+    // Update lastSeenAt for the current user
+    currentUser.lastSeenAt = readAt;
+    await currentUser.save();
 
     return res.status(200).json({
       message: 'Message marked as read successfully',
