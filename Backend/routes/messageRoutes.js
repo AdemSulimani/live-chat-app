@@ -4,6 +4,7 @@ const {
   sendMessage,
   markAsRead,
   markMessageAsRead,
+  deleteConversation,
 } = require('../controllers/messageController');
 const { protect } = require('../middleware/authMiddleware');
 const { messageLimiter } = require('../middleware/rateLimiter');
@@ -21,6 +22,9 @@ router.put('/read/:friendId', markAsRead);
 
 // Mark a specific message as read (must be before /:friendId route)
 router.put('/:messageId/read', markMessageAsRead);
+
+// Delete conversation with a friend (must be before /:friendId route to avoid conflicts)
+router.delete('/conversation/:friendId', deleteConversation);
 
 // Get messages between current user and a friend (must be last to avoid conflicts)
 router.get('/:friendId', getMessages);

@@ -8,6 +8,7 @@ interface BlockedProps {
 export function Blocked({ onBack }: BlockedProps) {
     const {
         blockedUsers,
+        loading,
         handleUnblock
     } = useBlocked();
 
@@ -23,45 +24,67 @@ export function Blocked({ onBack }: BlockedProps) {
                         <polyline points="15 18 9 12 15 6"></polyline>
                     </svg>
                 </button>
-                <h2>Blocked</h2>
+                <h2>Blocked Users</h2>
             </div>
 
             {/* Blocked Users Count Container */}
             <div className="blocked-count-container">
                 <div className="blocked-count">
-                    {blockedUsers.length} {blockedUsers.length === 1 ? 'blocked user' : 'blocked users'}
+                    {loading ? (
+                        'Loading...'
+                    ) : (
+                        `${blockedUsers.length} ${blockedUsers.length === 1 ? 'blocked user' : 'blocked users'}`
+                    )}
                 </div>
             </div>
 
             {/* Blocked Users List Container */}
             <div className="blocked-list-container">
-                {blockedUsers.map(user => (
-                    <div key={user.id} className="blocked-card">
-                        <div className="blocked-card-content">
-                            <div className="blocked-avatar">
-                                {user.avatar ? (
-                                    <img src={user.avatar} alt={user.name} />
-                                ) : (
-                                    <div className="avatar-placeholder">
-                                        {user.name.charAt(0).toUpperCase()}
-                                    </div>
-                                )}
-                            </div>
-                            <div className="blocked-info">
-                                <h3 className="blocked-name">{user.name}</h3>
-                                <p className="blocked-username">@{user.username}</p>
-                            </div>
-                        </div>
-                        <div className="blocked-actions">
-                            <button 
-                                className="unblock-btn"
-                                onClick={() => handleUnblock(user.id)}
-                            >
-                                Unblock
-                            </button>
-                        </div>
+                {loading ? (
+                    <div className="blocked-loading">
+                        <div className="loading-spinner"></div>
+                        <p>Loading blocked users...</p>
                     </div>
-                ))}
+                ) : blockedUsers.length === 0 ? (
+                    <div className="blocked-empty">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M18 6L6 18M6 6l12 12"/>
+                        </svg>
+                        <h3>No Blocked Users</h3>
+                        <p>You haven't blocked any users yet.</p>
+                    </div>
+                ) : (
+                    blockedUsers.map(user => (
+                        <div key={user.id} className="blocked-card">
+                            <div className="blocked-card-content">
+                                <div className="blocked-avatar">
+                                    {user.avatar ? (
+                                        <img src={user.avatar} alt={user.name} />
+                                    ) : (
+                                        <div className="avatar-placeholder">
+                                            {user.name.charAt(0).toUpperCase()}
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="blocked-info">
+                                    <h3 className="blocked-name">{user.name}</h3>
+                                    <p className="blocked-username">@{user.username}</p>
+                                </div>
+                            </div>
+                            <div className="blocked-actions">
+                                <button 
+                                    className="unblock-btn"
+                                    onClick={() => handleUnblock(user.id)}
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M18 6L6 18M6 6l12 12"/>
+                                    </svg>
+                                    Unblock
+                                </button>
+                            </div>
+                        </div>
+                    ))
+                )}
             </div>
         </div>
     );

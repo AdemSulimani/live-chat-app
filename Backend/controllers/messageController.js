@@ -1,6 +1,8 @@
 const Message = require('../models/Message');
 const User = require('../models/User');
 const Notification = require('../models/Notification');
+const DeletedConversation = require('../models/DeletedConversation');
+const BlockedUser = require('../models/BlockedUser');
 const { isUserInChatWith } = require('../socket/socketServer');
 
 // ============================================
@@ -66,13 +68,45 @@ const getMessages = async (req, res) => {
       return res.status(403).json({ message: 'You can only message your friends' });
     }
 
-    // Get messages between the two users (in both directions)
-    const messages = await Message.find({
+    // ============================================
+    // CHECK IF CONVERSATION IS DELETED BY CURRENT USER
+    // ============================================
+    // Perspektiva për përdoruesin:
+    // - Përdoruesi që fshin bisedën: shfaqen vetëm mesazhet pas fshirjes (chat i ri)
+    // - Përdoruesi tjetër: mesazhet e vjetra mbeten të dukshme (nuk ka rekord të fshirë për të)
+    //
+    // Si funksionon pas refresh:
+    // 1. Pas refresh, frontend-i bën fetch nga API (GET /api/messages/:friendId)
+    // 2. API-ja kontrollon DeletedConversation për përdoruesin aktual
+    // 3. Nëse ka rekord të fshirë, kthehen vetëm mesazhet me createdAt > deletedAt
+    // 4. Rezultati: mesazhet e vjetra nuk shfaqen, vetëm mesazhet e reja
+    //
+    // Logjika:
+    // - Nëse ka rekord të fshirë: Query createdAt > deletedAt → kthehen vetëm mesazhet pas fshirjes
+    // - Nëse nuk ka rekord të fshirë: kthehen të gjitha mesazhet
+    const deletedConversation = await DeletedConversation.findOne({
+      userId: currentUserId,
+      otherUserId: targetFriendId,
+    });
+
+    // Query për mesazhet midis dy përdoruesve (në të dy drejtimet)
+    let messageQuery = {
       $or: [
         { senderId: currentUserId, receiverId: targetFriendId },
         { senderId: targetFriendId, receiverId: currentUserId },
       ],
-    })
+    };
+
+    // Nëse biseda është e fshirë nga përdoruesi aktual, shto kusht për të marrë vetëm mesazhet pas deletedAt
+    // Kjo garanton që mesazhet e vjetra (para deletedAt) nuk kthehen
+    // Përdoruesi tjetër nuk ka rekord të fshirë, kështu që ai sheh të gjitha mesazhet
+    if (deletedConversation && deletedConversation.deletedAt) {
+      messageQuery.createdAt = { $gt: deletedConversation.deletedAt };
+    }
+
+    // Get messages between the two users (in both directions)
+    // Nëse biseda është e fshirë, kthe vetëm mesazhet pas deletedAt
+    const messages = await Message.find(messageQuery)
       .populate('senderId', 'name displayName username profilePhoto')
       .populate('receiverId', 'name displayName username profilePhoto')
       .sort({ createdAt: -1 }) // Më të rejat së pari
@@ -103,13 +137,8 @@ const getMessages = async (req, res) => {
       });
     }
 
-    // Get total count for pagination
-    const totalMessages = await Message.countDocuments({
-      $or: [
-        { senderId: currentUserId, receiverId: targetFriendId },
-        { senderId: targetFriendId, receiverId: currentUserId },
-      ],
-    });
+    // Get total count for pagination (duke përdorur të njëjtin query si për mesazhet)
+    const totalMessages = await Message.countDocuments(messageQuery);
 
     // Format messages for frontend
     const formattedMessages = messages
@@ -205,10 +234,21 @@ const sendMessage = async (req, res) => {
     // ============================================
     // VERIFY NOT BLOCKED
     // ============================================
-    // Verifikimi që përdoruesi nuk është bllokuar
-    if (sender.blockedUsers.includes(receiverId) || receiver.blockedUsers.includes(senderId)) {
-      return res.status(403).json({ message: 'Cannot send message to this user' });
+    // Kontrollo nëse dërguesi është i bllokuar nga marrësi
+    // Nëse marrësi ka bllokuar dërguesin, mos lejo dërgimin e mesazhit
+    // dhe kthe mesazh gabimi që nuk zbulon që përdoruesi është i bllokuar
+    const isSenderBlockedByReceiver = await BlockedUser.findOne({
+      blockerId: receiverId,
+      blockedId: senderId,
+    });
+
+    if (isSenderBlockedByReceiver) {
+      return res.status(403).json({ message: 'User either has deleted his account or has blocked you' });
     }
+
+    // NUK kontrollojmë nëse dërguesi ka bllokuar marrësin
+    // Kjo lejon që bllokuesi të dërgojë mesazhe nëse dëshiron
+    // (biseda është e fshirë për bllokuesin, por ai mund të dërgojë mesazhe të reja)
 
     // Create and save message
     const message = new Message({
@@ -219,6 +259,35 @@ const sendMessage = async (req, res) => {
     });
 
     const savedMessage = await message.save();
+
+    // ============================================
+    // REMOVE DELETED CONVERSATION RECORD IF EXISTS
+    // ============================================
+    // Kur dërgohet mesazh i ri, rekordi i DeletedConversation fshihet për të dy drejtimet
+    // (sender dhe receiver). Kjo lejon që mesazhet e reja të shfaqen normalisht.
+    // 
+    // Logjika:
+    // - Nëse sender ka fshirë bisedën më parë, fshi rekordin e sender
+    // - Nëse receiver ka fshirë bisedën më parë, fshi rekordin e receiver
+    // - Pas fshirjes, mesazhet e reja do të shfaqen për të dy përdoruesit
+    try {
+      // Fshi rekordin nëse sender ka fshirë conversation me receiver
+      await DeletedConversation.deleteOne({
+        userId: senderId,
+        otherUserId: receiverId,
+      });
+      
+      // Fshi rekordin nëse receiver ka fshirë conversation me sender
+      await DeletedConversation.deleteOne({
+        userId: receiverId,
+        otherUserId: senderId,
+      });
+    } catch (deleteError) {
+      // Nuk ndalojmë procesin nëse fshirja dështon
+      // Kjo është një operacion "best effort" - mesazhi duhet të dërgohet edhe nëse
+      // fshirja e rekordit të DeletedConversation dështon
+      console.error('Error removing deleted conversation record:', deleteError);
+    }
 
     // Populate sender and receiver info
     await savedMessage.populate('senderId', 'name displayName username profilePhoto');
@@ -409,10 +478,121 @@ const markMessageAsRead = async (req, res) => {
   }
 };
 
+// @desc    Delete conversation with a friend
+// @route   DELETE /api/messages/conversation/:friendId
+// @access  Private
+// 
+// Ky endpoint fshin bisedën për përdoruesin aktual (vetëm për atë që e bën delete).
+// Mesazhet nuk fshihen fizikisht nga databaza, por krijohet një rekord në DeletedConversation
+// që tregon se mesazhet para deletedAt nuk duhet të shfaqen për këtë përdorues.
+// 
+// Procesi:
+// 1. Verifikon autentifikimin dhe validitetin e përdoruesit
+// 2. Kontrollon që përdoruesit janë miq
+// 3. Nëse rekordi ekziston, update-on deletedAt me timestamp të ri
+// 4. Nëse rekordi nuk ekziston, krijon rekord të ri në DeletedConversation
+// 5. Pas kësaj, mesazhet e vjetra nuk do të shfaqen për këtë përdorues
+const deleteConversation = async (req, res) => {
+  try {
+    const { friendId } = req.params;
+
+    // Validim i parametrit
+    if (!friendId) {
+      return res.status(400).json({ message: 'Friend ID is required' });
+    }
+
+    // Verifikim autentifikimi
+    if (!req.user || !req.user._id) {
+      return res.status(401).json({ message: 'User not authenticated' });
+    }
+
+    const currentUserId = req.user._id.toString();
+    const targetFriendId = friendId;
+
+    // Validim: nuk mund të fshish bisedën me veten
+    if (currentUserId === targetFriendId) {
+      return res.status(400).json({ message: 'Cannot delete conversation with yourself' });
+    }
+
+    // Verifikim që përdoruesi i synuar ekziston
+    const targetUser = await User.findById(targetFriendId);
+    if (!targetUser) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Verifikim që përdoruesi aktual ekziston
+    const currentUser = await User.findById(currentUserId);
+    if (!currentUser) {
+      return res.status(404).json({ message: 'Current user not found' });
+    }
+
+    // Verifikim miqësie - mund të fshish bisedën vetëm me miqtë
+    if (!currentUser.friends.includes(targetFriendId)) {
+      return res.status(403).json({ message: 'You can only delete conversations with your friends' });
+    }
+
+    // Kontrollo nëse biseda është tashmë e fshirë nga ky përdorues
+    const existingDeletedConversation = await DeletedConversation.findOne({
+      userId: currentUserId,
+      otherUserId: targetFriendId,
+    });
+
+    const deletedAt = new Date();
+
+    if (existingDeletedConversation) {
+      // Nëse rekordi ekziston, update-on deletedAt me timestamp të ri
+      // Kjo garanton që edhe mesazhet e reja (nëse ka pasur) do të fshihen
+      existingDeletedConversation.deletedAt = deletedAt;
+      await existingDeletedConversation.save();
+
+      return res.status(200).json({
+        message: 'Conversation deleted successfully',
+        deletedAt: deletedAt,
+      });
+    }
+
+    // Krijo rekord të ri në DeletedConversation
+    // Kjo do të bëjë që mesazhet para deletedAt të mos shfaqen për këtë përdorues
+    const deletedConversation = new DeletedConversation({
+      userId: currentUserId,
+      otherUserId: targetFriendId,
+      deletedAt: deletedAt,
+    });
+
+    await deletedConversation.save();
+
+    return res.status(200).json({
+      message: 'Conversation deleted successfully',
+      deletedAt: deletedAt,
+    });
+  } catch (error) {
+    console.error('Delete conversation error:', error);
+    
+    // Error handling më specifik për validation errors
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({ 
+        message: 'Validation error', 
+        error: error.message 
+      });
+    }
+
+    // Error handling për duplicate key (nëse ndodh ndonjë race condition)
+    if (error.code === 11000) {
+      // Rekordi u krijua nga një request tjetër, kthe success
+      return res.status(200).json({
+        message: 'Conversation deleted successfully',
+      });
+    }
+
+    return res.status(500).json({ message: 'Server error' });
+  }
+};
+
 module.exports = {
   getMessages,
   sendMessage,
   markAsRead,
   markMessageAsRead,
+  deleteConversation,
 };
 

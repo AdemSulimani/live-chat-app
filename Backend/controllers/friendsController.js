@@ -1,7 +1,8 @@
 const User = require('../models/User');
 const FriendRequest = require('../models/FriendRequest');
 const Message = require('../models/Message');
-const { isUserOnline, getDisplayedStatusForUser } = require('../socket/socketServer');
+const BlockedUser = require('../models/BlockedUser');
+const { isUserOnline, getDisplayedStatusForUser, emitToUsers } = require('../socket/socketServer');
 
 // @desc    Get user's friends list
 // @route   GET /api/friends
@@ -30,9 +31,24 @@ const getFriends = async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
+    // Get list of blocked user IDs
+    const blockedUserRecords = await BlockedUser.find({
+      blockerId: req.user._id,
+    }).select('blockedId').lean();
+
+    const blockedUserIds = blockedUserRecords.map(record => record.blockedId.toString());
+
+    // Filter out blocked users from friends list
+    // NUK filtrojmë përdoruesit me biseda të fshira - ata duhet të mbeten në listën e miqve
+    // Biseda është e fshirë (përmes DeletedConversation), por miqësia mbetet
+    const unblockedFriends = user.friends.filter(friend => {
+      const friendIdStr = friend._id.toString();
+      return !blockedUserIds.includes(friendIdStr);
+    });
+
     // Format friends data with unread message counts, online status, and displayed status
     const friendsWithUnreadCounts = await Promise.all(
-      user.friends.map(async (friend) => {
+      unblockedFriends.map(async (friend) => {
         const friendIdStr = friend._id.toString();
         
         // Count unread messages from this friend
@@ -55,8 +71,9 @@ const getFriends = async (req, res) => {
         // 1. Friend ka lastSeenEnabled = true
         // 2. Current user ka lastSeenEnabled = true (reciprocitet)
         // Nëse njëri e ka disable, asnjëri nuk shikon last seen të tjetrit
-        const friendLastSeenEnabled = friend.lastSeenEnabled !== false; // Default: true
-        const currentUserLastSeenEnabled = currentUser.lastSeenEnabled !== false; // Default: true
+        // Kthe vlerën aktuale nga databaza (undefined/null = true by default)
+        const friendLastSeenEnabled = friend.lastSeenEnabled !== false && friend.lastSeenEnabled !== null; // Default: true
+        const currentUserLastSeenEnabled = currentUser.lastSeenEnabled !== false && currentUser.lastSeenEnabled !== null; // Default: true
         const showLastSeen = friendLastSeenEnabled && currentUserLastSeenEnabled;
 
         return {
@@ -67,7 +84,7 @@ const getFriends = async (req, res) => {
           isOnline: isOnline,
           activityStatus: friend.activityStatus || 'offline',
           displayedStatus: displayedStatus,
-          lastSeenEnabled: friendLastSeenEnabled,
+          lastSeenEnabled: friend.lastSeenEnabled !== undefined && friend.lastSeenEnabled !== null ? friend.lastSeenEnabled : true, // Kthe vlerën aktuale ose true si default
           lastSeenAt: showLastSeen && friend.lastSeenAt ? friend.lastSeenAt : null,
           unreadCount: unreadCount,
         };
@@ -189,8 +206,9 @@ const getFriendStatus = async (req, res) => {
     // 1. Friend ka lastSeenEnabled = true
     // 2. Current user ka lastSeenEnabled = true (reciprocitet)
     // Nëse njëri e ka disable, asnjëri nuk shikon last seen të tjetrit
-    const friendLastSeenEnabled = friend.lastSeenEnabled !== false; // Default: true
-    const currentUserLastSeenEnabled = currentUser.lastSeenEnabled !== false; // Default: true
+    // Kthe vlerën aktuale nga databaza (undefined/null = true by default)
+    const friendLastSeenEnabled = friend.lastSeenEnabled !== false && friend.lastSeenEnabled !== null; // Default: true
+    const currentUserLastSeenEnabled = currentUser.lastSeenEnabled !== false && currentUser.lastSeenEnabled !== null; // Default: true
     const showLastSeen = friendLastSeenEnabled && currentUserLastSeenEnabled;
 
     return res.status(200).json({
@@ -198,7 +216,7 @@ const getFriendStatus = async (req, res) => {
       isOnline: isOnline,
       activityStatus: friend.activityStatus || 'offline',
       displayedStatus: displayedStatus,
-      lastSeenEnabled: friendLastSeenEnabled,
+      lastSeenEnabled: friend.lastSeenEnabled !== undefined && friend.lastSeenEnabled !== null ? friend.lastSeenEnabled : true, // Kthe vlerën aktuale ose true si default
       lastSeenAt: showLastSeen && friend.lastSeenAt ? friend.lastSeenAt : null,
     });
   } catch (error) {
@@ -229,10 +247,30 @@ const updateLastSeenEnabled = async (req, res) => {
       req.user._id,
       { lastSeenEnabled: lastSeenEnabled },
       { new: true }
-    ).select('lastSeenEnabled');
+    ).select('lastSeenEnabled friends');
 
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
+    }
+
+    // ============================================
+    // EMIT SOCKET.IO EVENT TO ALL FRIENDS
+    // ============================================
+    // Dërgo update për të gjithë miqtë që last seen enabled ka ndryshuar
+    // Kjo lejon që frontend të përditësojë menjëherë pa pasur nevojë për refresh
+    try {
+      if (user.friends && user.friends.length > 0) {
+        const friendIds = user.friends.map(friend => friend.toString());
+        
+        // Dërgo event për të gjithë miqtë
+        emitToUsers(friendIds, 'last_seen_enabled_updated', {
+          userId: user._id.toString(),
+          lastSeenEnabled: user.lastSeenEnabled,
+        });
+      }
+    } catch (socketError) {
+      // Nuk ndalojmë procesin nëse Socket.IO dështon
+      console.error('Error emitting last seen enabled update:', socketError);
     }
 
     return res.status(200).json({
