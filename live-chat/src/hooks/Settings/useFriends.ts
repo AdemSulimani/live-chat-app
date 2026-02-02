@@ -28,6 +28,21 @@ export function useFriends() {
             }
 
             try {
+                // Load blocked users first to filter them out
+                const blockedResponse = await fetch(`${API_URL}/api/blocked`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json',
+                    },
+                });
+
+                let blockedUserIds: string[] = [];
+                if (blockedResponse.ok) {
+                    const blockedData = await blockedResponse.json();
+                    blockedUserIds = (blockedData.blockedUsers || []).map((user: any) => user.id);
+                }
+
                 const response = await fetch(`${API_URL}/api/friends`, {
                     method: 'GET',
                     headers: {
@@ -38,7 +53,11 @@ export function useFriends() {
 
                 if (response.ok) {
                     const data = await response.json();
-                    setFriends(data.friends || []);
+                    // Filter out blocked users (backend should already filter, but this is for safety)
+                    const unblockedFriends = (data.friends || []).filter((friend: any) => 
+                        !blockedUserIds.includes(friend.id)
+                    );
+                    setFriends(unblockedFriends);
                 } else if (response.status === 401) {
                     console.error('Authentication failed');
                     // Will be handled by ProtectedRoute
@@ -89,6 +108,21 @@ export function useFriends() {
                 return;
             }
 
+            // Load blocked users first to filter them out
+            const blockedResponse = await fetch(`${API_URL}/api/blocked`, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                },
+            });
+
+            let blockedUserIds: string[] = [];
+            if (blockedResponse.ok) {
+                const blockedData = await blockedResponse.json();
+                blockedUserIds = (blockedData.blockedUsers || []).map((user: any) => user.id);
+            }
+
             // Refresh friends list
             const friendsResponse = await fetch(`${API_URL}/api/friends`, {
                 method: 'GET',
@@ -100,7 +134,11 @@ export function useFriends() {
 
             if (friendsResponse.ok) {
                 const friendsData = await friendsResponse.json();
-                setFriends(friendsData.friends || []);
+                // Filter out blocked users (backend should already filter, but this is for safety)
+                const unblockedFriends = (friendsData.friends || []).filter((friend: any) => 
+                    !blockedUserIds.includes(friend.id)
+                );
+                setFriends(unblockedFriends);
             }
         } catch (error) {
             console.error('Error removing friend:', error);

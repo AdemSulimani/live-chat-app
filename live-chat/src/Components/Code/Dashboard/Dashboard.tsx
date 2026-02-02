@@ -37,6 +37,8 @@ export function Dashboard() {
         successMessage,
         loadMoreMessages,
         setErrorMessage,
+        showBlockedMessagePopup,
+        setShowBlockedMessagePopup,
         setSuccessMessage,
         messagesEndRef,
         chatContainerRef,
@@ -422,8 +424,10 @@ export function Dashboard() {
                                             // 2. Current user ka lastSeenEnabled = true (reciprocitet)
                                             // Nëse njëri e ka disable, shfaq activity status në vend të last seen
                                             
-                                            const friendLastSeenEnabled = selectedFriend.lastSeenEnabled !== false; // Default: true
-                                            const currentUserLastSeenEnabled = currentUser?.lastSeenEnabled !== false; // Default: true
+                                            // Kontrollo lastSeenEnabled për të dy përdoruesit
+                                            // Nëse është undefined ose null, konsiderohet si true (default)
+                                            const friendLastSeenEnabled = selectedFriend.lastSeenEnabled !== false && selectedFriend.lastSeenEnabled !== null; // Default: true
+                                            const currentUserLastSeenEnabled = currentUser?.lastSeenEnabled !== false && currentUser?.lastSeenEnabled !== null; // Default: true
                                             const showLastSeen = friendLastSeenEnabled && currentUserLastSeenEnabled;
                                             
                                             if (showLastSeen) {
@@ -760,6 +764,31 @@ export function Dashboard() {
                     </div>
                 )}
             </main>
+
+            {/* Blocked Message Popup */}
+            {showBlockedMessagePopup && (
+                <div className="blocked-message-popup-overlay" onClick={() => setShowBlockedMessagePopup(false)}>
+                    <div className="blocked-message-popup" onClick={(e) => e.stopPropagation()}>
+                        <div className="blocked-message-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <line x1="12" y1="8" x2="12" y2="12"></line>
+                                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                            </svg>
+                        </div>
+                        <div className="blocked-message-content">
+                            <h3>Message was not sent</h3>
+                            <p>User has either deleted his account or blocked you</p>
+                        </div>
+                        <button 
+                            className="blocked-message-close-btn" 
+                            onClick={() => setShowBlockedMessagePopup(false)}
+                        >
+                            OK
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {/* Block User Confirmation Popup */}
             {showBlockConfirm && selectedFriend && (

@@ -3,6 +3,7 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const Message = require('../models/Message');
 const Notification = require('../models/Notification');
+const BlockedUser = require('../models/BlockedUser');
 
 let io;
 
@@ -329,11 +330,25 @@ const initializeSocket = (server) => {
         // ============================================
         // VERIFY NOT BLOCKED
         // ============================================
-        // Verifikimi që përdoruesi nuk është bllokuar
-        if (sender.blockedUsers.includes(receiverId) || receiver.blockedUsers.includes(senderId)) {
-          socket.emit('message_error', { message: 'Cannot send message to this user' });
+        // Kontrollo nëse dërguesi është i bllokuar nga marrësi
+        // Nëse marrësi ka bllokuar dërguesin, mos lejo dërgimin e mesazhit
+        // dhe kthe mesazh gabimi që nuk zbulon që përdoruesi është i bllokuar
+        const isSenderBlockedByReceiver = await BlockedUser.findOne({
+          blockerId: receiverId,
+          blockedId: senderId,
+        });
+
+        if (isSenderBlockedByReceiver) {
+          socket.emit('message_error', { 
+            message: 'User either has deleted his account or has blocked you',
+            isBlocked: true // Flag për të identifikuar këtë lloj gabimi në frontend
+          });
           return;
         }
+
+        // NUK kontrollojmë nëse dërguesi ka bllokuar marrësin
+        // Kjo lejon që bllokuesi të dërgojë mesazhe nëse dëshiron
+        // (biseda është e fshirë për bllokuesin, por ai mund të dërgojë mesazhe të reja)
 
         // Create and save message to database
         const message = new Message({

@@ -1,4 +1,5 @@
 const User = require('../models/User');
+const BlockedUser = require('../models/BlockedUser');
 
 // @desc    Search users by username or email
 // @route   GET /api/users/search?q=username_or_email
@@ -70,6 +71,20 @@ const findUser = async (req, res) => {
       return res.status(400).json({ message: 'Cannot search for yourself' });
     }
 
+    // ============================================
+    // CHECK IF SEARCHER IS BLOCKED BY FOUND USER
+    // ============================================
+    // Kontrollo nëse përdoruesi që kërkon është i bllokuar nga përdoruesi që kërkohet
+    // Nëse është i bllokuar, kthe "User not found" për të mos zbuluar që përdoruesi ekziston
+    const isSearcherBlockedByFoundUser = await BlockedUser.findOne({
+      blockerId: user._id, // Përdoruesi që u gjet (bllokuesi)
+      blockedId: req.user._id, // Përdoruesi që kërkon (i bllokuari)
+    });
+
+    if (isSearcherBlockedByFoundUser) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
     return res.status(200).json({
       message: 'User found successfully',
       user: {
@@ -108,10 +123,31 @@ const updateLastSeenEnabled = async (req, res) => {
       req.user._id,
       { lastSeenEnabled: lastSeenEnabled },
       { new: true }
-    ).select('lastSeenEnabled');
+    ).select('lastSeenEnabled friends');
 
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
+    }
+
+    // ============================================
+    // EMIT SOCKET.IO EVENT TO ALL FRIENDS
+    // ============================================
+    // Dërgo update për të gjithë miqtë që last seen enabled ka ndryshuar
+    // Kjo lejon që frontend të përditësojë menjëherë pa pasur nevojë për refresh
+    try {
+      const { emitToUsers } = require('../socket/socketServer');
+      if (user.friends && user.friends.length > 0) {
+        const friendIds = user.friends.map(friend => friend.toString());
+        
+        // Dërgo event për të gjithë miqtë
+        emitToUsers(friendIds, 'last_seen_enabled_updated', {
+          userId: user._id.toString(),
+          lastSeenEnabled: user.lastSeenEnabled,
+        });
+      }
+    } catch (socketError) {
+      // Nuk ndalojmë procesin nëse Socket.IO dështon
+      console.error('Error emitting last seen enabled update:', socketError);
     }
 
     return res.status(200).json({

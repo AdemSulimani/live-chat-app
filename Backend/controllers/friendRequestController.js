@@ -1,6 +1,7 @@
 const FriendRequest = require('../models/FriendRequest');
 const User = require('../models/User');
 const Notification = require('../models/Notification');
+const BlockedUser = require('../models/BlockedUser');
 const { emitToUser, isUserOnline, getDisplayedStatusForUser } = require('../socket/socketServer');
 
 // @desc    Get friend requests (sent and received)
@@ -86,10 +87,23 @@ const sendFriendRequest = async (req, res) => {
       return res.status(400).json({ message: 'You are already friends with this user' });
     }
 
-    // Check if user is blocked
-    if (currentUser.blockedUsers.includes(userId) || targetUser.blockedUsers.includes(req.user._id)) {
-      return res.status(400).json({ message: 'Cannot send friend request' });
+    // ============================================
+    // VERIFY NOT BLOCKED
+    // ============================================
+    // Kontrollo nëse përdoruesi që dërgon (fromUser) është i bllokuar nga përdoruesi që merr (toUser)
+    // Nëse toUser ka bllokuar fromUser, mos lejo dërgimin e friend request
+    // dhe kthe mesazh gabimi që nuk zbulon që përdoruesi është i bllokuar
+    const isSenderBlockedByReceiver = await BlockedUser.findOne({
+      blockerId: userId, // toUser (marrësi)
+      blockedId: req.user._id, // fromUser (dërguesi)
+    });
+
+    if (isSenderBlockedByReceiver) {
+      return res.status(404).json({ message: 'User not found' });
     }
+
+    // NUK kontrollojmë nëse dërguesi ka bllokuar marrësin
+    // Kjo lejon që bllokuesi të dërgojë friend request nëse dëshiron
 
     // Check if there's already a pending request (in either direction)
     const existingPendingRequest = await FriendRequest.findOne({

@@ -70,6 +70,7 @@ export function useDashboard() {
     const [messageInput, setMessageInput] = useState('');
     const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([]);
     const [notifications, setNotifications] = useState<Notification[]>([]);
+    const [blockedUserIds, setBlockedUserIds] = useState<string[]>([]);
     const [loading, setLoading] = useState(true);
     const [loadingMessages, setLoadingMessages] = useState(false);
     const [isTyping, setIsTyping] = useState(false); // Tregues typing për shokun e zgjedhur
@@ -86,6 +87,7 @@ export function useDashboard() {
     const [addFriendInput, setAddFriendInput] = useState('');
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
+    const [showBlockedMessagePopup, setShowBlockedMessagePopup] = useState(false);
     
     // Message edit and options state
     const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
@@ -230,6 +232,22 @@ export function useDashboard() {
             }
 
             try {
+                // Load blocked users first to filter them out
+                const blockedResponse = await fetch(`${API_URL}/api/blocked`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json',
+                    },
+                });
+
+                let blockedIds: string[] = [];
+                if (blockedResponse.ok) {
+                    const blockedData = await blockedResponse.json();
+                    blockedIds = (blockedData.blockedUsers || []).map((user: any) => user.id);
+                    setBlockedUserIds(blockedIds);
+                }
+
                 // Load friends
                 const friendsResponse = await fetch(`${API_URL}/api/friends`, {
                     method: 'GET',
@@ -241,7 +259,11 @@ export function useDashboard() {
 
                 if (friendsResponse.ok) {
                     const friendsData = await friendsResponse.json();
-                    const formattedFriends = (friendsData.friends || []).map((friend: any) => {
+                    // Filter out blocked users (backend should already filter, but this is for safety)
+                    const unblockedFriends = (friendsData.friends || []).filter((friend: any) => 
+                        !blockedIds.includes(friend.id)
+                    );
+                    const formattedFriends = unblockedFriends.map((friend: any) => {
                         // Llogarit displayedStatus bazuar në isOnline dhe activityStatus
                         const displayedStatus = calculateDisplayedStatus(
                             friend.isOnline || false,
@@ -393,7 +415,11 @@ export function useDashboard() {
 
             // Update friends list - llogarit displayedStatus për çdo mik
             // Backend mund të dërgojë displayedStatus, por llogarisim për siguri
-            const formattedFriends = (data.friends || []).map((friend: any) => {
+            // Filter out blocked users
+            const unblockedFriends = (data.friends || []).filter((friend: any) => 
+                !blockedUserIds.includes(friend.id)
+            );
+            const formattedFriends = unblockedFriends.map((friend: any) => {
                 // Nëse backend ka dërguar displayedStatus, përdor atë
                 // Përndryshe, llogarit bazuar në isOnline dhe activityStatus
                 const displayedStatus = friend.displayedStatus || calculateDisplayedStatus(
@@ -646,6 +672,41 @@ export function useDashboard() {
                         : msg
                 )
             );
+        });
+
+        // ============================================
+        // LISTEN FOR LAST SEEN ENABLED UPDATED
+        // ============================================
+        // Dëgjo për last_seen_enabled_updated event - kur përditësohet last seen enabled setting i një friend-i
+        // Data: { userId, lastSeenEnabled }
+        socket.on('last_seen_enabled_updated', (data: any) => {
+            const { userId, lastSeenEnabled } = data;
+            
+            if (!userId || lastSeenEnabled === undefined) {
+                return;
+            }
+
+            // Përditëso lastSeenEnabled për friend në friends list
+            setFriends(prev => prev.map(f => {
+                if (f.id === userId) {
+                    return {
+                        ...f,
+                        lastSeenEnabled: lastSeenEnabled,
+                    };
+                }
+                return f;
+            }));
+
+            // Përditëso edhe selectedFriend nëse është friend-i i zgjedhur aktualisht
+            setSelectedFriend(prev => {
+                if (prev && prev.id === userId) {
+                    return {
+                        ...prev,
+                        lastSeenEnabled: lastSeenEnabled,
+                    };
+                }
+                return prev;
+            });
         });
 
         // ============================================
@@ -1478,7 +1539,12 @@ export function useDashboard() {
                     isOnline: data.isOnline || false,
                     activityStatus: data.activityStatus || 'offline',
                     displayedStatus: data.displayedStatus || 'offline',
-                    lastSeenEnabled: data.lastSeenEnabled !== undefined ? data.lastSeenEnabled : friend.lastSeenEnabled !== false, // Default: true
+                    // Kthe vlerën aktuale nga API ose përdor default true
+                    lastSeenEnabled: data.lastSeenEnabled !== undefined && data.lastSeenEnabled !== null 
+                        ? data.lastSeenEnabled 
+                        : (friend.lastSeenEnabled !== undefined && friend.lastSeenEnabled !== null 
+                            ? friend.lastSeenEnabled 
+                            : true), // Default: true
                     lastSeenAt: data.lastSeenAt ? new Date(data.lastSeenAt) : friend.lastSeenAt,
                 };
                 setSelectedFriend(updatedFriend);
@@ -1491,7 +1557,12 @@ export function useDashboard() {
                             isOnline: data.isOnline || false,
                             displayedStatus: data.displayedStatus || 'offline',
                             activityStatus: data.activityStatus || 'offline',
-                            lastSeenEnabled: data.lastSeenEnabled !== undefined ? data.lastSeenEnabled : f.lastSeenEnabled !== false, // Default: true
+                            // Kthe vlerën aktuale nga API ose përdor default true
+                            lastSeenEnabled: data.lastSeenEnabled !== undefined && data.lastSeenEnabled !== null 
+                                ? data.lastSeenEnabled 
+                                : (f.lastSeenEnabled !== undefined && f.lastSeenEnabled !== null 
+                                    ? f.lastSeenEnabled 
+                                    : true), // Default: true
                             lastSeenAt: data.lastSeenAt ? new Date(data.lastSeenAt) : f.lastSeenAt,
                             unreadCount: 0, // Rivendos numrin e mesazheve të palexuara
                         };
@@ -1634,10 +1705,20 @@ export function useDashboard() {
 
         // Dëgjo për gabime
         const handleMessageError = (error: any) => {
-            // Mesazhi dështoi - hiq optimistic message dhe trego gabim
+            // Mesazhi dështoi - hiq optimistic message
             setMessages(prev => prev.filter(msg => msg.id !== tempId));
-            setErrorMessage(error.message || 'Failed to send message. Please try again.');
-            setTimeout(() => setErrorMessage(null), 5000);
+            
+            // Kontrollo nëse është blocking error
+            if (error.isBlocked || error.message?.includes('deleted his account') || error.message?.includes('blocked you')) {
+                // Shfaq popup specifik për blocking error
+                setShowBlockedMessagePopup(true);
+                // Auto-close popup pas 5 sekondave
+                setTimeout(() => setShowBlockedMessagePopup(false), 5000);
+            } else {
+                // Për gabime të tjera, shfaq error message normal
+                setErrorMessage(error.message || 'Failed to send message. Please try again.');
+                setTimeout(() => setErrorMessage(null), 5000);
+            }
 
             // Hiq listeners
             socket.off('message_sent', handleMessageSent);
@@ -2036,12 +2117,77 @@ export function useDashboard() {
         }
     };
 
-    const handleDeleteChat = () => {
-        if (selectedFriend) {
-            setMessages([]);
-            setSelectedFriend(null);
-            setShowMoreOptions(false);
-            console.log(`Chat with ${selectedFriend.name} deleted`);
+    /**
+     * Handle Delete Chat
+     * 
+     * Ky funksion fshin bisedën me përdoruesin e zgjedhur.
+     * 
+     * Procesi:
+     * 1. Bën request në backend për të krijuar rekord në DeletedConversation
+     * 2. Pas suksesit, fshin mesazhet nga state (chat bëhet bosh menjëherë)
+     * 3. Pastron typing indicator dhe mbyll popup-in
+     * 4. Pas refresh, mesazhet e vjetra nuk do të ngarkohen (backend filtron me deletedAt)
+     * 
+     * VËREJTJE: Fshirja është vetëm për përdoruesin aktual. Përdoruesi tjetër ende sheh mesazhet e vjetra.
+     */
+    const handleDeleteChat = async () => {
+        if (!selectedFriend) {
+            return;
+        }
+
+        const token = getToken();
+        if (!token) {
+            console.error('No token available');
+            setErrorMessage('Authentication required. Please log in again.');
+            return;
+        }
+
+        try {
+            // Bëj request në API për të fshirë bisedën
+            // Backend krijon rekord në DeletedConversation që tregon se mesazhet
+            // para deletedAt nuk duhet të shfaqen për këtë përdorues
+            const response = await fetch(`${API_URL}/api/messages/conversation/${selectedFriend.id}`, {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                },
+            });
+
+            if (!response.ok) {
+                if (response.status === 401) {
+                    console.error('Authentication failed');
+                    setErrorMessage('Authentication failed. Please log in again.');
+                    return;
+                }
+                
+                // Lexo mesazhin e gabimit nga backend
+                const data = await response.json().catch(() => ({ 
+                    message: 'Failed to delete conversation' 
+                }));
+                console.error('Error deleting conversation:', data.message);
+                setErrorMessage(data.message || 'Failed to delete conversation');
+                return;
+            }
+
+            // Pas suksesit, pastro state-in për të bërë chat-in bosh menjëherë
+            setMessages([]); // Fshi të gjitha mesazhet nga state
+            setIsTyping(false); // Hiq typing indicator nëse ka
+            setShowMoreOptions(false); // Mbyll popup-in
+            setSuccessMessage(`Conversation with ${selectedFriend.name} deleted successfully`);
+            
+            // Hiq success message pas 3 sekondave
+            setTimeout(() => {
+                setSuccessMessage(null);
+            }, 3000);
+
+            console.log(`Chat with ${selectedFriend.name} deleted successfully`);
+            
+            // VËREJTJE: Pas refresh, mesazhet e vjetra nuk do të ngarkohen automatikisht
+            // sepse backend filtron mesazhet bazuar në DeletedConversation.deletedAt
+        } catch (error) {
+            console.error('Error deleting conversation:', error);
+            setErrorMessage('An error occurred while deleting the conversation');
         }
     };
 
@@ -2050,13 +2196,76 @@ export function useDashboard() {
         setShowBlockConfirm(true);
     };
 
-    const confirmBlockUser = () => {
-        if (selectedFriend) {
+    const confirmBlockUser = async () => {
+        if (!selectedFriend) {
+            return;
+        }
+
+        const token = getToken();
+        if (!token) {
+            setErrorMessage('You must be logged in to block a user');
+            setShowBlockConfirm(false);
+            return;
+        }
+
+        // Validation: Check if trying to block yourself
+        if (selectedFriend.id === user?.id) {
+            setErrorMessage('Cannot block yourself');
+            setShowBlockConfirm(false);
+            setTimeout(() => setErrorMessage(null), 3000);
+            return;
+        }
+
+        // Validation: Check if user is already blocked
+        if (blockedUserIds.includes(selectedFriend.id)) {
+            setErrorMessage('User is already blocked');
+            setShowBlockConfirm(false);
+            setTimeout(() => setErrorMessage(null), 3000);
+            return;
+        }
+
+        try {
+            const response = await fetch(`${API_URL}/api/blocked/${selectedFriend.id}`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                },
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                if (response.status === 401) {
+                    setErrorMessage('Your session has expired. Please login again.');
+                    setShowBlockConfirm(false);
+                    return;
+                }
+                // Backend validation errors (already blocked, cannot block yourself, etc.)
+                setErrorMessage(data.message || 'Failed to block user');
+                setShowBlockConfirm(false);
+                setTimeout(() => setErrorMessage(null), 3000);
+                return;
+            }
+
+            // Success: Remove friend from list and update blocked users
             setFriends(prev => prev.filter(f => f.id !== selectedFriend.id));
             setSelectedFriend(null);
             setMessages([]);
             setShowBlockConfirm(false);
+            
+            // Add to blocked users list
+            setBlockedUserIds(prev => [...prev, selectedFriend.id]);
+            
+            setSuccessMessage(`${selectedFriend.name} has been blocked successfully`);
+            setTimeout(() => setSuccessMessage(null), 3000);
+            
             console.log(`${selectedFriend.name} has been blocked`);
+        } catch (error) {
+            console.error('Error blocking user:', error);
+            setErrorMessage('An error occurred while blocking the user. Please try again.');
+            setShowBlockConfirm(false);
+            setTimeout(() => setErrorMessage(null), 3000);
         }
     };
 
@@ -2571,8 +2780,10 @@ export function useDashboard() {
         // 1. Current user (sender) ka lastSeenEnabled = true
         // 2. Selected friend (receiver) ka lastSeenEnabled = true (reciprocitet)
         // Nëse njëri e ka disable, shfaq vetëm "Delivered", jo "Seen"
-        const currentUserLastSeenEnabled = currentUser.lastSeenEnabled !== false; // Default: true
-        const friendLastSeenEnabled = selectedFriend?.lastSeenEnabled !== false; // Default: true
+        // Kontrollo lastSeenEnabled për të dy përdoruesit
+        // Nëse është undefined ose null, konsiderohet si true (default)
+        const currentUserLastSeenEnabled = currentUser.lastSeenEnabled !== false && currentUser.lastSeenEnabled !== null; // Default: true
+        const friendLastSeenEnabled = selectedFriend?.lastSeenEnabled !== false && selectedFriend?.lastSeenEnabled !== null; // Default: true
         const showSeenStatus = currentUserLastSeenEnabled && friendLastSeenEnabled;
 
         // Nëse mesazhi është i lexuar dhe ka readAt
@@ -2665,6 +2876,8 @@ export function useDashboard() {
         successMessage,
         setErrorMessage,
         setSuccessMessage,
+        showBlockedMessagePopup,
+        setShowBlockedMessagePopup,
         messagesEndRef,
         loadMoreMessages,
         chatContainerRef,
