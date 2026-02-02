@@ -110,12 +110,11 @@ const userSchema = new mongoose.Schema(
 // Kjo garanton që kur një përdorues ekzistues bën update, lastSeenEnabled do të jetë true
 // nëse nuk ekziston në dokument
 // Për përdoruesit që lexohen pa u ruajtur, në kod trajtohet si true (përdoret !== false)
-userSchema.pre('save', function(next) {
+userSchema.pre('save', async function() {
   // Nëse lastSeenEnabled nuk është i definuar ose është null, vendos default: true
   if (this.lastSeenEnabled === undefined || this.lastSeenEnabled === null) {
     this.lastSeenEnabled = true;
   }
-  next();
 });
 
 // Hash password-it para se të ruhet në databazë

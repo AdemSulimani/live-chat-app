@@ -349,6 +349,15 @@ const initializeSocket = (server) => {
         await savedMessage.populate('senderId', 'name displayName username profilePhoto');
         await savedMessage.populate('receiverId', 'name displayName username profilePhoto');
 
+        // ============================================
+        // SET DELIVERED STATUS
+        // ============================================
+        // Mesazhi konsiderohet "delivered" sapo të ruhet në databazë
+        // Pavarësisht nëse marrësi është online apo jo
+        const deliveredAt = new Date();
+        savedMessage.deliveredAt = deliveredAt;
+        await savedMessage.save();
+
         // Format message for frontend
         const formattedMessage = {
           id: savedMessage._id.toString(),
@@ -357,6 +366,7 @@ const initializeSocket = (server) => {
           content: savedMessage.content,
           timestamp: savedMessage.createdAt,
           isRead: savedMessage.isRead,
+          deliveredAt: deliveredAt,
         };
 
         // Send confirmation to sender
@@ -419,31 +429,23 @@ const initializeSocket = (server) => {
         // ============================================
         // REAL-TIME MESSAGE DELIVERY
         // ============================================
-        // Kontrollo nëse marrësi është online duke kontrolluar activeUsers Map
+        // Dërgo message_delivered event te dërguesi (deliveredAt është tashmë i vendosur)
+        if (activeUsers.has(senderId)) {
+          io.to(`user:${senderId}`).emit('message_delivered', {
+            messageId: savedMessage._id.toString(),
+            deliveredAt: deliveredAt,
+          });
+        }
+
+        // Kontrollo nëse marrësi është online për të dërguar mesazhin real-time
         if (activeUsers.has(receiverId)) {
-          // Marrësi është online - vendos deliveredAt dhe dërgo mesazhin real-time
-          const deliveredAt = new Date();
-          savedMessage.deliveredAt = deliveredAt;
-          await savedMessage.save();
-          
-          // Përditëso formattedMessage me deliveredAt
-          formattedMessage.deliveredAt = deliveredAt;
-          
-          // Dërgo mesazhin real-time përmes Socket Room
+          // Marrësi është online - dërgo mesazhin real-time
           io.to(`user:${receiverId}`).emit('new_message', {
             message: formattedMessage,
           });
-          
-          // Dërgo message_delivered event te dërguesi
-          if (activeUsers.has(senderId)) {
-            io.to(`user:${senderId}`).emit('message_delivered', {
-              messageId: savedMessage._id.toString(),
-              deliveredAt: deliveredAt,
-            });
-          }
         }
-        // Nëse marrësi është offline, mesazhi është tashmë i ruajtur në DB
-        // deliveredAt do të vendoset kur përdoruesi të bëjë fetch mesazheve (në getMessages)
+        // Nëse marrësi është offline, mesazhi është tashmë i ruajtur në DB me deliveredAt
+        // Marrësi do ta marrë mesazhin kur të bëjë fetch mesazheve (në getMessages)
 
       } catch (error) {
         console.error('Send message via socket error:', error);

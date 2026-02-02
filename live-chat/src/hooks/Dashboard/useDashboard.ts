@@ -1618,6 +1618,8 @@ export function useDashboard() {
                 content: data.data.content,
                 timestamp: new Date(data.data.timestamp),
                 isRead: data.data.isRead,
+                deliveredAt: data.data.deliveredAt ? new Date(data.data.deliveredAt) : undefined,
+                readAt: data.data.readAt ? new Date(data.data.readAt) : undefined,
             };
 
             // Zëvendëso optimistic message me mesazhin real
