@@ -1,6 +1,6 @@
 import '../../Style/Settings style/Settings.css';
 import { useNavigate } from 'react-router-dom';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useUser } from '../../../contexts/UserContext';
 import { useSocket } from '../../../contexts/SocketContext';
 import { Friends } from './Friends/Friends';
@@ -12,6 +12,14 @@ export function Settings() {
     const { logout } = useUser();
     const { socket } = useSocket();
     const [selectedSection, setSelectedSection] = useState<string | null>(null);
+    const [showSidebar, setShowSidebar] = useState(true);
+
+    // Shfaq sidebar-in në mobile kur nuk ka seksion të zgjedhur
+    useEffect(() => {
+        if (!selectedSection) {
+            setShowSidebar(true);
+        }
+    }, [selectedSection]);
 
     const handleLogout = () => {
         // Mbyll socket connection nëse ekziston
@@ -29,7 +37,7 @@ export function Settings() {
     return (
         <div className="settings-container">
             {/* Sidebar */}
-            <aside className="settings-sidebar">
+            <aside className={`settings-sidebar ${showSidebar ? 'show' : 'hide'}`}>
                 {/* Back Arrow to Dashboard */}
                 <div className="settings-back-arrow">
                     <button 
@@ -46,7 +54,10 @@ export function Settings() {
                 <div className="settings-sections">
                     <button 
                         className={`settings-section-btn ${selectedSection === 'friends' ? 'active' : ''}`}
-                        onClick={() => setSelectedSection('friends')}
+                        onClick={() => {
+                            setSelectedSection('friends');
+                            setShowSidebar(false);
+                        }}
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                             <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
@@ -59,7 +70,10 @@ export function Settings() {
                     
                     <button 
                         className={`settings-section-btn ${selectedSection === 'blocked' ? 'active' : ''}`}
-                        onClick={() => setSelectedSection('blocked')}
+                        onClick={() => {
+                            setSelectedSection('blocked');
+                            setShowSidebar(false);
+                        }}
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                             <circle cx="12" cy="12" r="10"></circle>
@@ -70,7 +84,10 @@ export function Settings() {
                     
                     <button 
                         className={`settings-section-btn ${selectedSection === 'lastseen' ? 'active' : ''}`}
-                        onClick={() => setSelectedSection('lastseen')}
+                        onClick={() => {
+                            setSelectedSection('lastseen');
+                            setShowSidebar(false);
+                        }}
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                             <circle cx="12" cy="12" r="10"></circle>
@@ -97,13 +114,22 @@ export function Settings() {
             </aside>
 
             {/* Main Content Area */}
-            <main className="settings-main">
+            <main className={`settings-main ${!showSidebar ? 'full-width' : ''}`}>
                 {selectedSection === 'friends' ? (
-                    <Friends onBack={() => setSelectedSection(null)} />
+                    <Friends onBack={() => {
+                        setSelectedSection(null);
+                        setShowSidebar(true);
+                    }} />
                 ) : selectedSection === 'blocked' ? (
-                    <Blocked onBack={() => setSelectedSection(null)} />
+                    <Blocked onBack={() => {
+                        setSelectedSection(null);
+                        setShowSidebar(true);
+                    }} />
                 ) : selectedSection === 'lastseen' ? (
-                    <LastSeen onBack={() => setSelectedSection(null)} />
+                    <LastSeen onBack={() => {
+                        setSelectedSection(null);
+                        setShowSidebar(true);
+                    }} />
                 ) : (
                     <div className="settings-content">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
