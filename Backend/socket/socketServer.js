@@ -250,11 +250,17 @@ const initializeSocket = (server) => {
     // Handle send_message event
     socket.on('send_message', async (data) => {
       try {
-        const { receiverId, content } = data;
+        const { receiverId, content, imageUrl } = data;
 
         // Validation
-        if (!receiverId || !content || !content.trim()) {
-          socket.emit('message_error', { message: 'Receiver ID and content are required' });
+        if (!receiverId) {
+          socket.emit('message_error', { message: 'Receiver ID is required' });
+          return;
+        }
+
+        // Mesazhi duhet të ketë ose content ose imageUrl (ose të dyja)
+        if (!content && !imageUrl) {
+          socket.emit('message_error', { message: 'Message must have either content or imageUrl' });
           return;
         }
 
@@ -272,30 +278,66 @@ const initializeSocket = (server) => {
         }
 
         // ============================================
+        // VALIDATE IMAGE URL
+        // ============================================
+        // Nëse ka imageUrl, validoj që është valid URL
+        if (imageUrl) {
+          if (typeof imageUrl !== 'string' || imageUrl.trim().length === 0) {
+            socket.emit('message_error', { message: 'Invalid imageUrl provided' });
+            return;
+          }
+          
+          // Validim bazik për URL format
+          try {
+            const url = new URL(imageUrl);
+            // Kontrollo që URL është HTTP ose HTTPS
+            if (!['http:', 'https:'].includes(url.protocol)) {
+              socket.emit('message_error', { message: 'Image URL must use http or https protocol' });
+              return;
+            }
+          } catch (urlError) {
+            socket.emit('message_error', { message: 'Invalid imageUrl format' });
+            return;
+          }
+        }
+
+        // ============================================
         // SANITIZE MESSAGE CONTENT
         // ============================================
         // Sanitizo përmbajtjen e mesazhit për të shmangur XSS attacks
-        const sanitizeMessage = (content) => {
-          if (!content || typeof content !== 'string') {
-            return '';
-          }
-          let sanitized = content
-            .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-            .replace(/<[^>]+>/g, '')
-            .replace(/javascript:/gi, '')
-            .replace(/on\w+\s*=/gi, '')
-            .trim();
-          if (sanitized.length > 5000) {
-            sanitized = sanitized.substring(0, 5000);
-          }
-          return sanitized;
-        };
+        // Vetëm nëse ka content
+        let sanitizedContent = '';
+        if (content) {
+          const sanitizeMessage = (content) => {
+            if (!content || typeof content !== 'string') {
+              return '';
+            }
+            let sanitized = content
+              .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+              .replace(/<[^>]+>/g, '')
+              .replace(/javascript:/gi, '')
+              .replace(/on\w+\s*=/gi, '')
+              .trim();
+            if (sanitized.length > 5000) {
+              sanitized = sanitized.substring(0, 5000);
+            }
+            return sanitized;
+          };
 
-        const sanitizedContent = sanitizeMessage(content);
-        
-        if (!sanitizedContent || sanitizedContent.trim().length === 0) {
-          socket.emit('message_error', { message: 'Message content is invalid or contains only unsafe characters' });
-          return;
+          sanitizedContent = sanitizeMessage(content);
+          
+          // Nëse ka content por pas sanitizimit është bosh, kontrollo nëse ka imageUrl
+          if (!sanitizedContent || sanitizedContent.trim().length === 0) {
+            // Nëse nuk ka imageUrl, kjo është gabim
+            if (!imageUrl) {
+              socket.emit('message_error', { message: 'Message content is invalid or contains only unsafe characters' });
+              return;
+            }
+            // Nëse ka imageUrl, lejo mesazh pa content
+            sanitizedContent = '';
+          } else {
+            sanitizedContent = sanitizedContent.trim();
+          }
         }
 
         // Check if trying to send to yourself
@@ -354,7 +396,8 @@ const initializeSocket = (server) => {
         const message = new Message({
           senderId: senderId,
           receiverId: receiverId,
-          content: sanitizedContent.trim(),
+          content: sanitizedContent || '', // Mund të jetë bosh nëse ka vetëm foto
+          imageUrl: imageUrl || null,
           isRead: false,
         });
 
@@ -379,6 +422,7 @@ const initializeSocket = (server) => {
           senderId: savedMessage.senderId._id.toString(),
           receiverId: savedMessage.receiverId._id.toString(),
           content: savedMessage.content,
+          imageUrl: savedMessage.imageUrl || null,
           timestamp: savedMessage.createdAt,
           isRead: savedMessage.isRead,
           deliveredAt: deliveredAt,

@@ -588,6 +588,12 @@
     100% { transform: rotate(360deg); }
 }
 
+@keyframes spin-small {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
 .dashboard-loading p {
     color: var(--black);
     font-size: 16px;
@@ -1239,6 +1245,156 @@
 }
 */
 
+/* Message Image */
+.message-image-container {
+    margin-bottom: 8px;
+    max-width: 100%;
+    border-radius: 8px;
+    overflow: hidden;
+    cursor: pointer;
+    transition: transform 0.2s;
+}
+
+.message-image-container:hover {
+    transform: scale(1.02);
+}
+
+.message-image {
+    max-width: 100%;
+    max-height: 400px;
+    width: auto;
+    height: auto;
+    display: block;
+    border-radius: 8px;
+    object-fit: contain;
+}
+
+.own-message .message-image-container {
+    border-radius: 8px 8px 0 8px;
+}
+
+.friend-message .message-image-container {
+    border-radius: 8px 8px 8px 0;
+}
+
+/* Message Text with Image */
+.message-text-with-image {
+    margin-top: 8px;
+    margin-bottom: 0;
+}
+
+/* Image Preview Container */
+.image-preview-container {
+    padding: 10px 20px;
+    border-top: 1px solid #e0e0e0;
+    background-color: #f5f5f5;
+    display: flex;
+    align-items: center;
+}
+
+.image-preview-wrapper {
+    position: relative;
+    display: inline-block;
+}
+
+.image-preview-thumbnail {
+    width: 80px;
+    height: 80px;
+    object-fit: cover;
+    border-radius: 8px;
+    border: 2px solid #e0e0e0;
+}
+
+.image-preview-remove {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: none;
+    background-color: #ff4444;
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.image-preview-remove:hover {
+    background-color: #cc0000;
+    transform: scale(1.1);
+}
+
+.image-preview-remove svg {
+    width: 14px;
+    height: 14px;
+}
+
+.image-preview-remove:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Cancel Upload Button */
+.image-preview-cancel {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: none;
+    background-color: #ff8800;
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.image-preview-cancel:hover {
+    background-color: #ff6600;
+    transform: scale(1.1);
+}
+
+.image-preview-cancel svg {
+    width: 14px;
+    height: 14px;
+}
+
+/* Image Upload Loading */
+.image-upload-loading {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1;
+}
+
+.image-preview-thumbnail.uploading {
+    opacity: 0.7;
+}
+
+.loading-spinner-small {
+    width: 20px;
+    height: 20px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin-small 0.8s linear infinite;
+}
+
 /* Message Input */
 .message-input-form {
     padding: 15px 20px;
@@ -1291,6 +1447,33 @@
 .send-button svg {
     width: 20px;
     height: 20px;
+}
+
+/* Add Image Button */
+.add-image-button {
+    width: 45px;
+    height: 45px;
+    border-radius: 50%;
+    border: none;
+    background-color: #f0f0f0;
+    color: #666;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    flex-shrink: 0;
+}
+
+.add-image-button:hover {
+    background-color: #e0e0e0;
+    transform: scale(1.05);
+    color: var(--whatsappgreen);
+}
+
+.add-image-button svg {
+    width: 24px;
+    height: 24px;
 }
 
 /* No Chat Selected */
