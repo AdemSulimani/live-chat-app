@@ -95,6 +95,7 @@ const initializeSocket = (server) => {
   // Gjurmo statusin e typing: userId -> Set<receiverIds>
   // Kjo tregon për kë po shkruan çdo përdorues
   const typingStatus = new Map(); // senderId -> Set<receiverId>
+  globalTypingStatus = typingStatus; // Store globally për të qasur nga helper functions
 
   // ============================================
   // RATE LIMITING FOR SOCKET MESSAGES
@@ -1172,6 +1173,7 @@ const initializeSocket = (server) => {
 // Store active users globally (accessed from initializeSocket scope)
 let globalActiveUsers = null;
 let globalActiveChats = null;
+let globalTypingStatus = null;
 
 // Emit event to specific user
 const emitToUser = (userId, event, data) => {
@@ -1195,6 +1197,56 @@ const isUserOnline = (userId) => {
     return false;
   }
   return globalActiveUsers.has(userId);
+};
+
+// Disconnect user socket and remove from activeUsers
+const disconnectUser = (userId) => {
+  if (!io || !globalActiveUsers) {
+    return false;
+  }
+
+  const userIdStr = userId.toString();
+  
+  // Kontrollo nëse user-i është online
+  if (!globalActiveUsers.has(userIdStr)) {
+    return false; // User nuk është online
+  }
+
+  // Merr socketId nga activeUsers
+  const socketId = globalActiveUsers.get(userIdStr);
+  
+  // Gjej socket-in
+  const socket = io.sockets.sockets.get(socketId);
+  
+  if (socket) {
+    // Njofto receiverIds që user-i nuk po shkruan më (nëse ka typing status)
+    if (globalTypingStatus && globalTypingStatus.has(userIdStr)) {
+      const receiverIds = globalTypingStatus.get(userIdStr);
+      receiverIds.forEach(receiverId => {
+        if (globalActiveUsers && globalActiveUsers.has(receiverId)) {
+          io.to(`user:${receiverId}`).emit('user_typing', {
+            userId: userIdStr,
+            isTyping: false,
+          });
+        }
+      });
+      // Hiq typing status
+      globalTypingStatus.delete(userIdStr);
+    }
+
+    // Shkëput socket-in
+    socket.disconnect(true); // true = close connection immediately
+  }
+
+  // Hiq nga activeUsers
+  globalActiveUsers.delete(userIdStr);
+
+  // Hiq nga activeChats nëse ekziston
+  if (globalActiveChats && globalActiveChats.has(userIdStr)) {
+    globalActiveChats.delete(userIdStr);
+  }
+
+  return true;
 };
 
 // Check if user is in chat with a specific friend
@@ -1269,5 +1321,6 @@ module.exports = {
   isUserInChatWith,
   getDisplayedStatus, // Core helper function - merr user object dhe userId
   getDisplayedStatusForUser, // Convenience function - merr userId dhe bën query në DB
+  disconnectUser, // Disconnect user socket and remove from activeUsers
 };
 

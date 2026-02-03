@@ -1,9 +1,13 @@
 import '../../Style/Profile style/Profile-full.css';
 import { useNavigate } from 'react-router-dom';
 import { useProfileFull } from '../../../hooks/Profile/useProfileFull';
+import { useUser } from '../../../contexts/UserContext';
+import { useSocket } from '../../../contexts/SocketContext';
 
 export function ProfileFull() {
     const navigate = useNavigate();
+    const { logout } = useUser();
+    const { socket } = useSocket();
     const {
         profileData,
         isEditing,
@@ -17,7 +21,13 @@ export function ProfileFull() {
         toggleEdit,
         handleSave,
         handleCancel,
-        updateActivityStatus
+        updateActivityStatus,
+        showDeleteConfirm,
+        setShowDeleteConfirm,
+        deleting,
+        deleteError,
+        handleDeleteAccount,
+        clearDeleteError
     } = useProfileFull();
 
     return (
@@ -392,22 +402,126 @@ export function ProfileFull() {
                             )}
                         </div>
 
-                        {/* Delete Account Button */}
-                        <button 
-                            className="delete-account-btn"
-                            onClick={() => {
-                                // Handle delete account logic here
-                                console.log('Delete account clicked');
-                                if (window.confirm('Are you sure you want to delete your account? This action cannot be undone.')) {
-                                    // Handle account deletion
-                                    navigate('/login');
-                                }
-                            }}
-                        >
-                            Delete Account
-                        </button>
+                        {/* Delete Account Section */}
+                        <div className="delete-account-section">
+                            <div className="delete-account-divider"></div>
+                            <button 
+                                className="delete-account-btn"
+                                onClick={() => setShowDeleteConfirm(true)}
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M3 6h18"></path>
+                                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                </svg>
+                                Delete Account
+                            </button>
+                        </div>
                     </div>
                 </div>
+                )}
+
+                {/* Delete Account Confirmation Popup */}
+                {showDeleteConfirm && (
+                    <div className="delete-account-overlay" onClick={() => {
+                        if (!deleting) {
+                            clearDeleteError();
+                            setShowDeleteConfirm(false);
+                        }
+                    }}>
+                        <div className="delete-account-popup" onClick={(e) => e.stopPropagation()}>
+                            <div className="delete-account-header">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="delete-account-icon">
+                                    <path d="M3 6h18"></path>
+                                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                    <line x1="10" y1="11" x2="10" y2="17"></line>
+                                    <line x1="14" y1="11" x2="14" y2="17"></line>
+                                </svg>
+                                <h3>Delete Account</h3>
+                            </div>
+                            <div className="delete-account-content">
+                                <p>Are you sure you want to delete your account? <strong>This action cannot be undone.</strong></p>
+                                <p className="delete-account-warning">
+                                    This will permanently delete:
+                                </p>
+                                <ul className="delete-account-list">
+                                    <li>Your profile and all personal information</li>
+                                    <li>All your messages and chat history</li>
+                                    <li>Your friends list and friend requests</li>
+                                    <li>All notifications and activity data</li>
+                                </ul>
+                                <p className="delete-account-note">
+                                    You will be removed from all your friends' friend lists automatically.
+                                </p>
+                            </div>
+                            {deleteError && (
+                                <div className="delete-account-error" style={{ 
+                                    padding: '0 24px 16px',
+                                    color: '#dc3545',
+                                    fontSize: '14px',
+                                    textAlign: 'center'
+                                }}>
+                                    {deleteError}
+                                </div>
+                            )}
+                            <div className="delete-account-actions">
+                                <button 
+                                    className="cancel-delete-btn" 
+                                    onClick={() => {
+                                        if (!deleting) {
+                                            clearDeleteError();
+                                            setShowDeleteConfirm(false);
+                                        }
+                                    }}
+                                    disabled={deleting}
+                                >
+                                    Cancel
+                                </button>
+                                <button 
+                                    className="confirm-delete-btn" 
+                                    onClick={async () => {
+                                        const success = await handleDeleteAccount();
+                                        if (success) {
+                                            // Mbyll socket connection
+                                            if (socket) {
+                                                socket.disconnect();
+                                            }
+                                            // Bëj logout (pastron token dhe user data)
+                                            logout();
+                                            // Navigoj në login page me mesazh suksesi
+                                            navigate('/login', { 
+                                                state: { 
+                                                    message: 'Your account has been permanently deleted',
+                                                    messageType: 'success'
+                                                } 
+                                            });
+                                        }
+                                        // Nëse ka error, popup mbetet i hapur për të shfaqur error
+                                        // Nuk bëhet logout nëse ka gabim
+                                    }}
+                                    disabled={deleting}
+                                >
+                                    {deleting ? (
+                                        <>
+                                            <span style={{ display: 'inline-block', marginRight: '8px' }}>
+                                                <div style={{
+                                                    width: '14px',
+                                                    height: '14px',
+                                                    border: '2px solid rgba(255,255,255,0.3)',
+                                                    borderTop: '2px solid white',
+                                                    borderRadius: '50%',
+                                                    display: 'inline-block',
+                                                    animation: 'spin 0.8s linear infinite'
+                                                }}></div>
+                                            </span>
+                                            Deleting...
+                                        </>
+                                    ) : (
+                                        'Delete Account'
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 )}
             </main>
         </div>

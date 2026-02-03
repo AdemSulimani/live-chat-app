@@ -29,9 +29,28 @@ const messageLimiter = rateLimit({
   },
 });
 
+// Rate limiter për fshirjen e llogarisë
+// Maksimum 2 tentativa çdo 24 orë për çdo përdorues (operacion i rëndësishëm dhe i pakthyeshëm)
+const deleteAccountLimiter = rateLimit({
+  windowMs: 24 * 60 * 60 * 1000, // 24 orë
+  max: 2, // Maksimum 2 tentativa në 24 orë
+  message: {
+    message: 'Too many delete account attempts. Please try again later.',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  // Përdor user ID për rate limiting më të saktë
+  keyGenerator: (req) => {
+    return req.user ? req.user._id.toString() : ipKeyGenerator(req);
+  },
+  // Skip successful requests në rate limit count (vetëm tentativat e dështuara)
+  skipSuccessfulRequests: false, // Numërojmë të gjitha tentativat
+});
+
 module.exports = {
   loginLimiter,
   messageLimiter,
+  deleteAccountLimiter,
 };
 
 
