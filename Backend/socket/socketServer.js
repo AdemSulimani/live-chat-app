@@ -250,7 +250,7 @@ const initializeSocket = (server) => {
     // Handle send_message event
     socket.on('send_message', async (data) => {
       try {
-        const { receiverId, content, imageUrl } = data;
+        const { receiverId, content, imageUrl, audioUrl } = data;
 
         // Validation
         if (!receiverId) {
@@ -258,9 +258,9 @@ const initializeSocket = (server) => {
           return;
         }
 
-        // Mesazhi duhet të ketë ose content ose imageUrl (ose të dyja)
-        if (!content && !imageUrl) {
-          socket.emit('message_error', { message: 'Message must have either content or imageUrl' });
+        // Mesazhi duhet të ketë ose content, ose imageUrl, ose audioUrl (ose kombinime)
+        if (!content && !imageUrl && !audioUrl) {
+          socket.emit('message_error', { message: 'Message must have either content, imageUrl, or audioUrl' });
           return;
         }
 
@@ -302,6 +302,30 @@ const initializeSocket = (server) => {
         }
 
         // ============================================
+        // VALIDATE AUDIO URL
+        // ============================================
+        // Nëse ka audioUrl, validoj që është valid URL
+        if (audioUrl) {
+          if (typeof audioUrl !== 'string' || audioUrl.trim().length === 0) {
+            socket.emit('message_error', { message: 'Invalid audioUrl provided' });
+            return;
+          }
+          
+          // Validim bazik për URL format
+          try {
+            const url = new URL(audioUrl);
+            // Kontrollo që URL është HTTP ose HTTPS
+            if (!['http:', 'https:'].includes(url.protocol)) {
+              socket.emit('message_error', { message: 'Audio URL must use http or https protocol' });
+              return;
+            }
+          } catch (urlError) {
+            socket.emit('message_error', { message: 'Invalid audioUrl format' });
+            return;
+          }
+        }
+
+        // ============================================
         // SANITIZE MESSAGE CONTENT
         // ============================================
         // Sanitizo përmbajtjen e mesazhit për të shmangur XSS attacks
@@ -326,14 +350,14 @@ const initializeSocket = (server) => {
 
           sanitizedContent = sanitizeMessage(content);
           
-          // Nëse ka content por pas sanitizimit është bosh, kontrollo nëse ka imageUrl
+          // Nëse ka content por pas sanitizimit është bosh, kontrollo nëse ka imageUrl ose audioUrl
           if (!sanitizedContent || sanitizedContent.trim().length === 0) {
-            // Nëse nuk ka imageUrl, kjo është gabim
-            if (!imageUrl) {
+            // Nëse nuk ka imageUrl ose audioUrl, kjo është gabim
+            if (!imageUrl && !audioUrl) {
               socket.emit('message_error', { message: 'Message content is invalid or contains only unsafe characters' });
               return;
             }
-            // Nëse ka imageUrl, lejo mesazh pa content
+            // Nëse ka imageUrl ose audioUrl, lejo mesazh pa content
             sanitizedContent = '';
           } else {
             sanitizedContent = sanitizedContent.trim();
@@ -396,8 +420,9 @@ const initializeSocket = (server) => {
         const message = new Message({
           senderId: senderId,
           receiverId: receiverId,
-          content: sanitizedContent || '', // Mund të jetë bosh nëse ka vetëm foto
+          content: sanitizedContent || '', // Mund të jetë bosh nëse ka vetëm foto ose audio
           imageUrl: imageUrl || null,
+          audioUrl: audioUrl || null,
           isRead: false,
         });
 
@@ -423,6 +448,7 @@ const initializeSocket = (server) => {
           receiverId: savedMessage.receiverId._id.toString(),
           content: savedMessage.content,
           imageUrl: savedMessage.imageUrl || null,
+          audioUrl: savedMessage.audioUrl || null,
           timestamp: savedMessage.createdAt,
           isRead: savedMessage.isRead,
           deliveredAt: deliveredAt,

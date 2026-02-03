@@ -15,8 +15,9 @@ const messageSchema = new mongoose.Schema(
     content: {
       type: String,
       required: function() {
-        // Content është i detyrueshëm vetëm nëse nuk ka imageUrl
-        return !this.imageUrl;
+        // Content është i detyrueshëm vetëm nëse nuk ka imageUrl ose audioUrl
+        // Lejo mesazhe vetëm me image ose vetëm me audio (pa tekst)
+        return !this.imageUrl && !this.audioUrl;
       },
       trim: true,
       maxlength: 5000, // Limit për gjatësinë e mesazhit
@@ -24,6 +25,10 @@ const messageSchema = new mongoose.Schema(
     imageUrl: {
       type: String,
       default: null, // Optional - foto mund të jetë pa tekst
+    },
+    audioUrl: {
+      type: String,
+      default: null, // Optional - audio mund të jetë pa tekst
     },
     isRead: {
       type: Boolean,

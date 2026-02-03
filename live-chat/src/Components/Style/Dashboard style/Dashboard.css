@@ -1283,6 +1283,94 @@
     margin-bottom: 0;
 }
 
+.message-text-with-media {
+    margin-top: 8px;
+    margin-bottom: 0;
+}
+
+/* Voice Message Container */
+.message-audio-container {
+    margin-bottom: 8px;
+    width: 100%;
+}
+
+.message-audio-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    background-color: rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    min-width: 250px;
+    max-width: 100%;
+}
+
+.own-message .message-audio-wrapper {
+    background-color: rgba(255, 255, 255, 0.15);
+}
+
+.friend-message .message-audio-wrapper {
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+.message-audio-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background-color: rgba(255, 255, 255, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    color: inherit;
+}
+
+.own-message .message-audio-icon {
+    background-color: rgba(255, 255, 255, 0.25);
+}
+
+.friend-message .message-audio-icon {
+    background-color: rgba(0, 0, 0, 0.1);
+}
+
+.message-audio-icon svg {
+    width: 18px;
+    height: 18px;
+}
+
+.message-audio-player {
+    flex: 1;
+    height: 36px;
+    outline: none;
+    min-width: 200px;
+}
+
+/* Custom styling for audio player controls */
+.message-audio-player::-webkit-media-controls-panel {
+    background-color: transparent;
+}
+
+.message-audio-player::-webkit-media-controls-play-button {
+    background-color: rgba(255, 255, 255, 0.8);
+    border-radius: 50%;
+}
+
+.message-audio-player::-webkit-media-controls-current-time-display,
+.message-audio-player::-webkit-media-controls-time-remaining-display {
+    color: inherit;
+    font-size: 12px;
+}
+
+.message-audio-player::-webkit-media-controls-timeline {
+    background-color: rgba(255, 255, 255, 0.3);
+    border-radius: 2px;
+}
+
+.message-audio-player::-webkit-media-controls-volume-slider {
+    background-color: rgba(255, 255, 255, 0.3);
+    border-radius: 2px;
+}
+
 /* Image Preview Container */
 .image-preview-container {
     padding: 10px 20px;
@@ -1474,6 +1562,250 @@
 .add-image-button svg {
     width: 24px;
     height: 24px;
+}
+
+.add-image-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Voice Recording Button */
+.voice-recording-button {
+    width: 45px;
+    height: 45px;
+    border-radius: 50%;
+    border: none;
+    background-color: #f0f0f0;
+    color: #666;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    flex-shrink: 0;
+}
+
+.voice-recording-button:hover {
+    background-color: #e0e0e0;
+    transform: scale(1.05);
+    color: #ff4444;
+}
+
+.voice-recording-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.voice-recording-button svg {
+    width: 24px;
+    height: 24px;
+}
+
+/* Voice Recording Indicator */
+.voice-recording-indicator {
+    padding: 12px 20px;
+    border-top: 1px solid #e0e0e0;
+    background-color: #fff5f5;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.recording-animation {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.recording-dot {
+    width: 12px;
+    height: 12px;
+    background-color: #ff4444;
+    border-radius: 50%;
+    animation: pulse-recording 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-recording {
+    0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.5;
+        transform: scale(1.2);
+    }
+}
+
+.recording-time {
+    flex: 1;
+    font-size: 14px;
+    font-weight: 600;
+    color: #ff4444;
+    font-family: 'Courier New', monospace;
+}
+
+.time-warning {
+    color: #ff8800;
+    font-size: 12px;
+    font-weight: normal;
+}
+
+/* Waveform Visualization */
+.waveform-visualization {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    height: 30px;
+    padding: 0 10px;
+    background-color: rgba(255, 255, 255, 0.1);
+    border-radius: 15px;
+    min-width: 100px;
+}
+
+.waveform-bar {
+    transition: height 0.1s ease-out;
+}
+
+.stop-recording-button {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: none;
+    background-color: #ff4444;
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.stop-recording-button:hover {
+    background-color: #cc0000;
+    transform: scale(1.1);
+}
+
+.stop-recording-button svg {
+    width: 18px;
+    height: 18px;
+}
+
+.cancel-recording-button {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: none;
+    background-color: #999;
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.cancel-recording-button:hover {
+    background-color: #666;
+    transform: scale(1.1);
+}
+
+.cancel-recording-button svg {
+    width: 18px;
+    height: 18px;
+}
+
+/* Audio Preview Container */
+.audio-preview-container {
+    padding: 12px 20px;
+    border-top: 1px solid #e0e0e0;
+    background-color: #f5f5f5;
+    display: flex;
+    align-items: center;
+}
+
+.audio-preview-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+}
+
+.audio-preview-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+}
+
+.audio-preview-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background-color: #ff4444;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.audio-preview-icon svg {
+    width: 20px;
+    height: 20px;
+}
+
+.audio-preview-content {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.audio-preview-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #666;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.audio-preview-duration {
+    font-size: 11px;
+    color: #999;
+    font-family: 'Courier New', monospace;
+}
+
+.audio-preview-player {
+    flex: 1;
+    height: 40px;
+    outline: none;
+    min-width: 200px;
+}
+
+.audio-preview-remove {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: none;
+    background-color: #ff4444;
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    flex-shrink: 0;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.audio-preview-remove:hover {
+    background-color: #cc0000;
+    transform: scale(1.1);
+}
+
+.audio-preview-remove svg {
+    width: 16px;
+    height: 16px;
 }
 
 /* No Chat Selected */

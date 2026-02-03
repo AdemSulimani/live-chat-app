@@ -52,6 +52,18 @@ export function Dashboard() {
         handleSendMessage,
         handleImageSelect,
         handleCancelUpload,
+        // Voice recording state and functions
+        isRecording,
+        recordingTime,
+        audioBlob,
+        audioPreview,
+        audioDuration,
+        uploadingAudio,
+        waveformData,
+        MAX_RECORDING_TIME,
+        startVoiceRecording,
+        stopVoiceRecording,
+        cancelVoiceRecording,
         handleAddFriend,
         handleAcceptFriendRequest,
         handleRejectFriendRequest,
@@ -596,19 +608,22 @@ export function Dashboard() {
                                                             {/* Message Options Menu */}
                                                             {showOptions && (
                                                                 <div className="message-options-menu">
-                                                                    <button
-                                                                        className="message-option-item"
-                                                                        onClick={(e) => {
-                                                                            e.stopPropagation();
-                                                                            handleStartEdit(message.id);
-                                                                        }}
-                                                                    >
-                                                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                                                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                                                                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                                                                        </svg>
-                                                                        <span>Edit</span>
-                                                                    </button>
+                                                                    {/* Hide Edit button for voice messages */}
+                                                                    {!message.audioUrl && (
+                                                                        <button
+                                                                            className="message-option-item"
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                handleStartEdit(message.id);
+                                                                            }}
+                                                                        >
+                                                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                                                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                                                            </svg>
+                                                                            <span>Edit</span>
+                                                                        </button>
+                                                                    )}
                                                                     <button
                                                                         className="message-option-item message-option-delete"
                                                                         onClick={(e) => {
@@ -701,9 +716,30 @@ export function Dashboard() {
                                                                                 />
                                                                             </div>
                                                                         )}
-                                                                        {/* Text Content - shfaqet poshtë fotos nëse ka foto, ose normalisht nëse nuk ka */}
+                                                                        {/* Voice Message Display */}
+                                                                        {message.audioUrl && (
+                                                                            <div className="message-audio-container">
+                                                                                <div className="message-audio-wrapper">
+                                                                                    <div className="message-audio-icon">
+                                                                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                                                            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                                                                                            <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                                                                                            <line x1="12" y1="19" x2="12" y2="23"></line>
+                                                                                            <line x1="8" y1="23" x2="16" y2="23"></line>
+                                                                                        </svg>
+                                                                                    </div>
+                                                                                    <audio 
+                                                                                        src={message.audioUrl} 
+                                                                                        controls 
+                                                                                        className="message-audio-player"
+                                                                                        preload="metadata"
+                                                                                    />
+                                                                                </div>
+                                                                            </div>
+                                                                        )}
+                                                                        {/* Text Content - shfaqet poshtë fotos/audio nëse ka, ose normalisht nëse nuk ka */}
                                                                         {message.content && (
-                                                                            <p className={message.imageUrl ? 'message-text-with-image' : ''}>{message.content}</p>
+                                                                            <p className={message.imageUrl || message.audioUrl ? 'message-text-with-media' : ''}>{message.content}</p>
                                                                         )}
                                                                         <div className="message-footer">
                                                                             <span className="message-time">
@@ -802,6 +838,102 @@ export function Dashboard() {
                             </div>
                         )}
 
+                        {/* Voice Recording Indicator */}
+                        {isRecording && (
+                            <div className="voice-recording-indicator">
+                                <div className="recording-animation">
+                                    <div className="recording-dot"></div>
+                                </div>
+                                {/* Waveform Visualization */}
+                                {waveformData && waveformData.length > 0 && (
+                                    <div className="waveform-visualization">
+                                        {waveformData.map((value, index) => (
+                                            <div
+                                                key={index}
+                                                className="waveform-bar"
+                                                style={{
+                                                    height: `${Math.max(4, value)}%`,
+                                                    width: '3px',
+                                                    backgroundColor: '#ff4444',
+                                                    borderRadius: '2px',
+                                                    transition: 'height 0.1s ease-out'
+                                                }}
+                                            />
+                                        ))}
+                                    </div>
+                                )}
+                                <span className="recording-time">
+                                    {Math.floor(recordingTime / 60)}:{(recordingTime % 60).toString().padStart(2, '0')}
+                                    {recordingTime >= MAX_RECORDING_TIME - 10 && (
+                                        <span className="time-warning"> (Max: {MAX_RECORDING_TIME / 60}min)</span>
+                                    )}
+                                </span>
+                                <button
+                                    type="button"
+                                    className="stop-recording-button"
+                                    onClick={stopVoiceRecording}
+                                    title="Stop recording"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                                        <rect x="6" y="6" width="12" height="12" rx="2"></rect>
+                                    </svg>
+                                </button>
+                                <button
+                                    type="button"
+                                    className="cancel-recording-button"
+                                    onClick={cancelVoiceRecording}
+                                    title="Cancel recording"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                                    </svg>
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Audio Preview (after recording stops) */}
+                        {audioPreview && !isRecording && (
+                            <div className="audio-preview-container">
+                                <div className="audio-preview-wrapper">
+                                    <div className="audio-preview-info">
+                                        <div className="audio-preview-icon">
+                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                                                <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                                                <line x1="12" y1="19" x2="12" y2="23"></line>
+                                                <line x1="8" y1="23" x2="16" y2="23"></line>
+                                            </svg>
+                                        </div>
+                                        <div className="audio-preview-content">
+                                            <span className="audio-preview-label">Voice message</span>
+                                            {audioDuration > 0 && (
+                                                <span className="audio-preview-duration">
+                                                    {Math.floor(audioDuration / 60)}:{(audioDuration % 60).toString().padStart(2, '0')}
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <audio 
+                                        src={audioPreview} 
+                                        controls 
+                                        className="audio-preview-player"
+                                    />
+                                    <button
+                                        type="button"
+                                        className="audio-preview-remove"
+                                        onClick={cancelVoiceRecording}
+                                        title="Remove audio"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
                         {/* Message Input */}
                         <form className="message-input-form" onSubmit={handleSendMessage}>
                             {/* Hidden file input */}
@@ -825,21 +957,48 @@ export function Dashboard() {
                                 className="add-image-button"
                                 onClick={() => fileInputRef.current?.click()}
                                 title="Add image"
+                                disabled={isRecording}
                             >
                                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                     <line x1="12" y1="5" x2="12" y2="19"></line>
                                     <line x1="5" y1="12" x2="19" y2="12"></line>
                                 </svg>
                             </button>
+                            {/* Voice recording button */}
+                            {!isRecording ? (
+                                <button
+                                    type="button"
+                                    className="voice-recording-button"
+                                    onClick={startVoiceRecording}
+                                    title="Record voice message"
+                                    disabled={uploadingImage}
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                                        <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                                        <line x1="12" y1="19" x2="12" y2="23"></line>
+                                        <line x1="8" y1="23" x2="16" y2="23"></line>
+                                    </svg>
+                                </button>
+                            ) : null}
                             <input
                                 type="text"
-                                placeholder={imagePreview ? "Add a caption..." : "Type a message..."}
+                                placeholder={
+                                    imagePreview ? "Add a caption..." : 
+                                    audioPreview ? "Add a caption (optional)..." : 
+                                    "Type a message..."
+                                }
                                 value={messageInput}
                                 onChange={(e) => setMessageInput(e.target.value)}
                                 className="message-input"
+                                disabled={isRecording}
                             />
-                            <button type="submit" className="send-button" disabled={(!messageInput.trim() && !selectedImage) || uploadingImage}>
-                                {uploadingImage ? (
+                            <button 
+                                type="submit" 
+                                className="send-button" 
+                                disabled={(!messageInput.trim() && !selectedImage && !audioBlob) || uploadingImage || uploadingAudio || isRecording}
+                            >
+                                {(uploadingImage || uploadingAudio) ? (
                                     <div className="loading-spinner-small"></div>
                                 ) : (
                                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -849,6 +1008,7 @@ export function Dashboard() {
                                 )}
                             </button>
                         </form>
+                        
                     </>
                 ) : (
                     <div className="no-chat-selected">
