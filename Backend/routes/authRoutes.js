@@ -4,8 +4,10 @@ const {
   loginUser,
   checkEmail,
   checkUsername,
+  deleteAccount,
 } = require('../controllers/authController');
-const { loginLimiter } = require('../middleware/rateLimiter');
+const { loginLimiter, deleteAccountLimiter } = require('../middleware/rateLimiter');
+const { protect } = require('../middleware/authMiddleware');
 
 const router = express.Router();
 
@@ -20,6 +22,9 @@ router.get('/check-email/:email', checkEmail);
 
 // Check username availability
 router.get('/check-username/:username', checkUsername);
+
+// Delete account route (protected me rate limiting)
+router.delete('/delete-account', protect, deleteAccountLimiter, deleteAccount);
 
 module.exports = router;
 

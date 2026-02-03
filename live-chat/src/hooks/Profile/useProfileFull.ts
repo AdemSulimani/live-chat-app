@@ -39,6 +39,9 @@ export function useProfileFull() {
     const [error, setError] = useState<string | null>(null);
     const [saving, setSaving] = useState<string | null>(null); // Field që po ruhet
     const [saveError, setSaveError] = useState<string | null>(null);
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [deleting, setDeleting] = useState(false); // Loading state për delete account
+    const [deleteError, setDeleteError] = useState<string | null>(null);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
     const { getToken, updateUser } = useUser();
@@ -484,6 +487,48 @@ export function useProfileFull() {
         }
     };
 
+    const handleDeleteAccount = async (): Promise<boolean> => {
+        setDeleting(true);
+        setDeleteError(null);
+
+        try {
+            const token = getToken();
+            if (!token) {
+                setDeleteError('You must be logged in to delete your account');
+                setDeleting(false);
+                return false;
+            }
+
+            const response = await fetch(`${API_URL}/api/auth/delete-account`, {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                },
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                setDeleteError(errorData.message || 'Failed to delete account');
+                setDeleting(false);
+                return false;
+            }
+
+            // Nëse sukses, return true për të treguar që delete u krye
+            setDeleting(false);
+            return true;
+        } catch (err) {
+            console.error('Error deleting account:', err);
+            setDeleteError('Something went wrong. Please try again.');
+            setDeleting(false);
+            return false;
+        }
+    };
+
+    const clearDeleteError = () => {
+        setDeleteError(null);
+    };
+
     return {
         profileData,
         isEditing,
@@ -497,7 +542,13 @@ export function useProfileFull() {
         toggleEdit,
         handleSave,
         handleCancel,
-        updateActivityStatus
+        updateActivityStatus,
+        showDeleteConfirm,
+        setShowDeleteConfirm,
+        deleting,
+        deleteError,
+        handleDeleteAccount,
+        clearDeleteError
     };
 }
 

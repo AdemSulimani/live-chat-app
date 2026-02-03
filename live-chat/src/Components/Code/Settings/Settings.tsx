@@ -1,17 +1,28 @@
 import '../../Style/Settings style/Settings.css';
 import { useNavigate } from 'react-router-dom';
 import { useState } from 'react';
+import { useUser } from '../../../contexts/UserContext';
+import { useSocket } from '../../../contexts/SocketContext';
 import { Friends } from './Friends/Friends';
 import { Blocked } from './Blocked/Blocked';
 import { LastSeen } from './LastSeen/LastSeen';
 
 export function Settings() {
     const navigate = useNavigate();
+    const { logout } = useUser();
+    const { socket } = useSocket();
     const [selectedSection, setSelectedSection] = useState<string | null>(null);
 
     const handleLogout = () => {
-        // Handle logout logic here
-        console.log('Logging out...');
+        // Mbyll socket connection nëse ekziston
+        if (socket) {
+            socket.disconnect();
+        }
+        
+        // Bëj logout (pastron token dhe user data nga storage)
+        logout();
+        
+        // Navigoj në login page
         navigate('/login');
     };
 

@@ -1,7 +1,7 @@
 import '../../Style/Login style/Login.css';
 import { useLogin } from '../../../hooks/Login/useLogin';
-import { Link, useNavigate } from 'react-router-dom';
-import { useEffect } from 'react';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { useEffect, useState } from 'react';
 
 export function Login() {
     const {
@@ -21,6 +21,17 @@ export function Login() {
     } = useLogin();
 
     const navigate = useNavigate();
+    const location = useLocation();
+    const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+    // Kontrollo nëse ka mesazh nga navigation state (p.sh. pas delete account)
+    useEffect(() => {
+        if (location.state && (location.state as any).message) {
+            setSuccessMessage((location.state as any).message);
+            // Pastro state pasi është lexuar
+            window.history.replaceState({}, document.title);
+        }
+    }, [location]);
 
     useEffect(() => {
         if (success && redirectPath) {
@@ -32,6 +43,12 @@ export function Login() {
         <section className="login-section">
             <div className="login-container">
                 <h2 className="login-title">Login</h2>
+
+                {successMessage && (
+                    <div className="auth-message auth-success">
+                        {successMessage}
+                    </div>
+                )}
 
                 {error && <div className="auth-message auth-error">{error}</div>}
 
