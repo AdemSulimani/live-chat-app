@@ -14,9 +14,16 @@ const messageSchema = new mongoose.Schema(
     },
     content: {
       type: String,
-      required: true,
+      required: function() {
+        // Content është i detyrueshëm vetëm nëse nuk ka imageUrl
+        return !this.imageUrl;
+      },
       trim: true,
       maxlength: 5000, // Limit për gjatësinë e mesazhit
+    },
+    imageUrl: {
+      type: String,
+      default: null, // Optional - foto mund të jetë pa tekst
     },
     isRead: {
       type: Boolean,

@@ -148,6 +148,7 @@ const getMessages = async (req, res) => {
         senderId: message.senderId._id.toString(),
         receiverId: message.receiverId._id.toString(),
         content: message.content,
+        imageUrl: message.imageUrl || null,
         timestamp: message.createdAt,
         isRead: message.isRead,
         readAt: message.readAt || null,
@@ -179,24 +180,55 @@ const getMessages = async (req, res) => {
 // @access  Private
 const sendMessage = async (req, res) => {
   try {
-    const { receiverId, content } = req.body;
+    const { receiverId, content, imageUrl } = req.body;
 
-    if (!receiverId || !content) {
-      return res.status(400).json({ message: 'Receiver ID and content are required' });
+    if (!receiverId) {
+      return res.status(400).json({ message: 'Receiver ID is required' });
     }
 
-    if (!content.trim()) {
-      return res.status(400).json({ message: 'Message content cannot be empty' });
+    // Mesazhi duhet të ketë ose content ose imageUrl (ose të dyja)
+    if (!content && !imageUrl) {
+      return res.status(400).json({ message: 'Message must have either content or imageUrl' });
     }
 
     // ============================================
-    // SANITIZE MESSAGE CONTENT
+    // VALIDATE IMAGE URL
     // ============================================
-    // Sanitizo përmbajtjen e mesazhit për të shmangur XSS attacks
-    const sanitizedContent = sanitizeMessage(content);
-    
-    if (!sanitizedContent || sanitizedContent.trim().length === 0) {
-      return res.status(400).json({ message: 'Message content is invalid or contains only unsafe characters' });
+    // Nëse ka imageUrl, validoj që është valid URL
+    if (imageUrl) {
+      if (typeof imageUrl !== 'string' || imageUrl.trim().length === 0) {
+        return res.status(400).json({ message: 'Invalid imageUrl provided' });
+      }
+      
+      // Validim bazik për URL format
+      try {
+        const url = new URL(imageUrl);
+        // Kontrollo që URL është HTTP ose HTTPS
+        if (!['http:', 'https:'].includes(url.protocol)) {
+          return res.status(400).json({ message: 'Image URL must use http or https protocol' });
+        }
+      } catch (urlError) {
+        return res.status(400).json({ message: 'Invalid imageUrl format' });
+      }
+    }
+
+    // Nëse ka content, validoj dhe sanitizo
+    let sanitizedContent = '';
+    if (content) {
+      if (!content.trim()) {
+        return res.status(400).json({ message: 'Message content cannot be empty' });
+      }
+
+      // ============================================
+      // SANITIZE MESSAGE CONTENT
+      // ============================================
+      // Sanitizo përmbajtjen e mesazhit për të shmangur XSS attacks
+      sanitizedContent = sanitizeMessage(content);
+      
+      if (!sanitizedContent || sanitizedContent.trim().length === 0) {
+        return res.status(400).json({ message: 'Message content is invalid or contains only unsafe characters' });
+      }
+      sanitizedContent = sanitizedContent.trim();
     }
 
     // Verify current user exists
@@ -254,7 +286,8 @@ const sendMessage = async (req, res) => {
     const message = new Message({
       senderId: senderId,
       receiverId: receiverId,
-      content: sanitizedContent.trim(),
+      content: sanitizedContent || '', // Mund të jetë bosh nëse ka vetëm foto
+      imageUrl: imageUrl || null,
       isRead: false,
     });
 
@@ -304,6 +337,7 @@ const sendMessage = async (req, res) => {
       senderId: savedMessage.senderId._id.toString(),
       receiverId: savedMessage.receiverId._id.toString(),
       content: savedMessage.content,
+      imageUrl: savedMessage.imageUrl || null,
       timestamp: savedMessage.createdAt,
       isRead: savedMessage.isRead,
       deliveredAt: savedMessage.deliveredAt || null,
@@ -588,11 +622,40 @@ const deleteConversation = async (req, res) => {
   }
 };
 
+// @desc    Upload chat photo
+// @route   POST /api/messages/upload-photo
+// @access  Private
+const uploadChatPhoto = async (req, res) => {
+  try {
+    // Verify current user exists
+    if (!req.user || !req.user._id) {
+      return res.status(401).json({ message: 'User not authenticated' });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ message: 'No file uploaded' });
+    }
+
+    // Get the file path from multer
+    const photoPath = `/uploads/chat-photos/${req.file.filename}`;
+    const fullPhotoUrl = `${req.protocol}://${req.get('host')}${photoPath}`;
+
+    return res.status(200).json({
+      message: 'Photo uploaded successfully',
+      imageUrl: fullPhotoUrl,
+    });
+  } catch (error) {
+    console.error('Upload chat photo error:', error);
+    return res.status(500).json({ message: 'Server error' });
+  }
+};
+
 module.exports = {
   getMessages,
   sendMessage,
   markAsRead,
   markMessageAsRead,
   deleteConversation,
+  uploadChatPhoto,
 };
 

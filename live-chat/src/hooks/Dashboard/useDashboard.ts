@@ -22,6 +22,7 @@ interface Message {
     senderId: string;
     receiverId: string;
     content: string;
+    imageUrl?: string | null; // URL e fotos nëse mesazhi ka foto
     timestamp: Date;
     isRead: boolean;
     readAt?: Date; // Koha kur mesazhi u lexua
@@ -68,6 +69,11 @@ export function useDashboard() {
     const [showSidebar, setShowSidebar] = useState(true);
     const [messages, setMessages] = useState<Message[]>([]);
     const [messageInput, setMessageInput] = useState('');
+    // Image upload state
+    const [selectedImage, setSelectedImage] = useState<File | null>(null);
+    const [imagePreview, setImagePreview] = useState<string | null>(null);
+    const [uploadingImage, setUploadingImage] = useState(false);
+    const uploadAbortControllerRef = useRef<AbortController | null>(null);
     const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([]);
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [blockedUserIds, setBlockedUserIds] = useState<string[]>([]);
@@ -483,6 +489,7 @@ export function useDashboard() {
                     senderId: senderId === user?.id ? 'current' : senderId,
                     receiverId: message.receiverId === user?.id ? 'current' : message.receiverId,
                     content: message.content,
+                    imageUrl: message.imageUrl || null,
                     timestamp: new Date(message.timestamp),
                     isRead: message.isRead,
                     readAt: message.readAt ? new Date(message.readAt) : undefined,
@@ -797,6 +804,7 @@ export function useDashboard() {
                     senderId: message.senderId === user?.id ? 'current' : message.senderId,
                     receiverId: message.receiverId === user?.id ? 'current' : message.receiverId,
                     content: message.content,
+                    imageUrl: message.imageUrl || null,
                     timestamp: new Date(message.timestamp),
                     isRead: message.isRead,
                     readAt: message.readAt ? new Date(message.readAt) : undefined,
@@ -847,6 +855,7 @@ export function useDashboard() {
                     senderId: message.senderId === user?.id ? 'current' : message.senderId,
                     receiverId: message.receiverId === user?.id ? 'current' : message.receiverId,
                     content: message.content || 'This message was deleted',
+                    imageUrl: message.imageUrl || null,
                     timestamp: new Date(message.timestamp),
                     isRead: message.isRead,
                     isDeleted: message.isDeleted || true,
@@ -1305,6 +1314,7 @@ export function useDashboard() {
                         senderId: msg.senderId === user.id ? 'current' : msg.senderId,
                         receiverId: msg.receiverId === user.id ? 'current' : msg.receiverId,
                         content: msg.content,
+                        imageUrl: msg.imageUrl || null,
                         timestamp: new Date(msg.timestamp),
                         isRead: msg.isRead,
                         readAt: msg.readAt ? new Date(msg.readAt) : undefined,
@@ -1610,12 +1620,135 @@ export function useDashboard() {
     };
 
     // ============================================
+    // IMAGE SELECT HANDLER
+    // ============================================
+    const handleImageSelect = (file: File) => {
+        // Validim: vetëm imazhe
+        const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+        if (!allowedTypes.includes(file.type)) {
+            setErrorMessage('Only image files are allowed (jpeg, jpg, png, gif, webp)');
+            setTimeout(() => setErrorMessage(null), 5000);
+            return false;
+        }
+
+        // Validim: madhësi maksimale (5MB)
+        const maxSize = 5 * 1024 * 1024; // 5MB
+        if (file.size > maxSize) {
+            setErrorMessage('File size too large. Maximum size is 5MB');
+            setTimeout(() => setErrorMessage(null), 5000);
+            return false;
+        }
+
+        // Pastro preview URL të vjetër nëse ekziston
+        if (imagePreview) {
+            URL.revokeObjectURL(imagePreview);
+        }
+
+        // Krijo preview me URL.createObjectURL()
+        const previewUrl = URL.createObjectURL(file);
+        setImagePreview(previewUrl);
+        
+        // Ruaj file në state
+        setSelectedImage(file);
+        
+        return true;
+    };
+
+    // ============================================
+    // IMAGE UPLOAD HANDLER
+    // ============================================
+    const handleImageUpload = async (file: File): Promise<string | null> => {
+        try {
+            setUploadingImage(true);
+            setErrorMessage(null);
+
+            const token = getToken();
+            if (!token) {
+                setErrorMessage('You must be logged in to upload photo');
+                setTimeout(() => setErrorMessage(null), 5000);
+                return null;
+            }
+
+            // Krijo AbortController për cancel upload
+            const abortController = new AbortController();
+            uploadAbortControllerRef.current = abortController;
+
+            // Krijo FormData
+            const formData = new FormData();
+            formData.append('photo', file);
+
+            // POST në /api/messages/upload-photo
+            const response = await fetch(`${API_URL}/api/messages/upload-photo`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                },
+                body: formData,
+                signal: abortController.signal, // Shto signal për cancel
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                setErrorMessage(errorData.message || 'Failed to upload photo');
+                setTimeout(() => setErrorMessage(null), 5000);
+                return null;
+            }
+
+            // Merr URL-në e fotos
+            const data = await response.json();
+            const imageUrl = data.imageUrl;
+
+            // Mos pastro preview dhe state këtu - do të pastrohet në handleSendMessage
+            // pasi optimistic message përdor preview lokal
+
+            // Pastro abort controller pas suksesit
+            uploadAbortControllerRef.current = null;
+            return imageUrl;
+        } catch (error: any) {
+            // Kontrollo nëse është cancel error
+            if (error.name === 'AbortError') {
+                console.log('Upload cancelled by user');
+                // Mos shfaq error message për cancel
+                return null;
+            }
+            
+            console.error('Image upload error:', error);
+            setErrorMessage('Something went wrong. Please try again.');
+            setTimeout(() => setErrorMessage(null), 5000);
+            return null;
+        } finally {
+            setUploadingImage(false);
+            uploadAbortControllerRef.current = null;
+        }
+    };
+
+    // ============================================
+    // CANCEL IMAGE UPLOAD HANDLER
+    // ============================================
+    const handleCancelUpload = () => {
+        // Nëse ka upload në progres, cancel-o
+        if (uploadAbortControllerRef.current) {
+            uploadAbortControllerRef.current.abort();
+            uploadAbortControllerRef.current = null;
+        }
+        
+        // Pastro preview dhe state
+        if (imagePreview) {
+            URL.revokeObjectURL(imagePreview);
+        }
+        setImagePreview(null);
+        setSelectedImage(null);
+        setUploadingImage(false);
+    };
+
+    // ============================================
     // SEND MESSAGE VIA SOCKET
     // ============================================
-    const handleSendMessage = (e: React.FormEvent) => {
+    const handleSendMessage = async (e: React.FormEvent) => {
         e.preventDefault();
         
-        if (!messageInput.trim() || !selectedFriend) {
+        // Mesazhi duhet të ketë ose content ose image (ose të dyja)
+        if ((!messageInput.trim() && !selectedImage) || !selectedFriend) {
             return;
         }
 
@@ -1629,23 +1762,74 @@ export function useDashboard() {
         }
 
         const messageContent = messageInput.trim();
+        let imageUrl: string | null = null;
+        const localPreviewUrl = imagePreview; // Ruaj preview lokal për optimistic update
+
+        // ============================================
+        // OPTIMISTIC UPDATE (para upload)
+        // ============================================
+        // Shto mesazhin optimistikisht në state me preview lokal për UI të shpejtë
         const tempId = `temp-${Date.now()}`; // Temporary ID për optimistic update
         
-        // ============================================
-        // OPTIMISTIC UPDATE
-        // ============================================
-        // Shto mesazhin optimistikisht në state për UI të shpejtë
+        // Krijo optimistic message me preview lokal nëse ka foto
         const optimisticMessage: Message = {
             id: tempId,
-                senderId: 'current',
-                receiverId: selectedFriend.id,
+            senderId: 'current',
+            receiverId: selectedFriend.id,
             content: messageContent,
-                timestamp: new Date(),
-                isRead: false
-            };
+            imageUrl: localPreviewUrl || null, // Përdor preview lokal për optimistic update
+            timestamp: new Date(),
+            isRead: false
+        };
         
         setMessages(prev => [...prev, optimisticMessage]);
         setMessageInput(''); // Pastro input menjëherë
+        
+        // Pastro preview dhe state pasi kemi ruajtur URL-në lokale
+        // (do të zëvendësohet me URL-në e serverit kur vjen përgjigja)
+        
+        // ============================================
+        // UPLOAD IMAGE IF SELECTED
+        // ============================================
+        // Nëse ka foto të zgjedhur, upload-o pas optimistic update
+        if (selectedImage) {
+            imageUrl = await handleImageUpload(selectedImage);
+            // Nëse upload dështoi, hiq optimistic message, pastro preview dhe ndalo dërgimin
+            if (!imageUrl) {
+                setMessages(prev => prev.filter(msg => msg.id !== tempId));
+                // Pastro preview dhe state nëse upload dështoi
+                if (localPreviewUrl) {
+                    URL.revokeObjectURL(localPreviewUrl);
+                }
+                setImagePreview(null);
+                setSelectedImage(null);
+                return;
+            }
+            
+            // Përditëso optimistic message me URL-në e serverit
+            setMessages(prev => 
+                prev.map(msg => 
+                    msg.id === tempId 
+                        ? { ...msg, imageUrl: imageUrl || null }
+                        : msg
+                )
+            );
+            
+            // Pastro preview dhe state pas upload-it të suksesshëm
+            // Preview URL do të zëvendësohet me URL-në e serverit në optimistic message
+            if (localPreviewUrl) {
+                URL.revokeObjectURL(localPreviewUrl);
+            }
+            setImagePreview(null);
+            setSelectedImage(null);
+        } else {
+            // Nëse nuk ka foto, pastro preview dhe state menjëherë
+            if (imagePreview) {
+                URL.revokeObjectURL(imagePreview);
+            }
+            setImagePreview(null);
+            setSelectedImage(null);
+        }
         
         // Scroll menjëherë në fund pas shtimit të mesazhit optimistik
         setTimeout(() => {
@@ -1673,7 +1857,8 @@ export function useDashboard() {
         // Dërgo mesazhin përmes socket
         socket.emit('send_message', {
             receiverId: selectedFriend.id,
-            content: messageContent,
+            content: messageContent || '', // Mund të jetë bosh nëse ka vetëm foto
+            imageUrl: imageUrl || undefined,
         });
 
         // ============================================
@@ -1687,6 +1872,7 @@ export function useDashboard() {
                 senderId: data.data.senderId === user?.id ? 'current' : data.data.senderId,
                 receiverId: data.data.receiverId === user?.id ? 'current' : data.data.receiverId,
                 content: data.data.content,
+                imageUrl: data.data.imageUrl || null,
                 timestamp: new Date(data.data.timestamp),
                 isRead: data.data.isRead,
                 deliveredAt: data.data.deliveredAt ? new Date(data.data.deliveredAt) : undefined,
@@ -2851,6 +3037,13 @@ export function useDashboard() {
         messages,
         messageInput,
         setMessageInput,
+        // Image upload state
+        selectedImage,
+        setSelectedImage,
+        imagePreview,
+        setImagePreview,
+        uploadingImage,
+        setUploadingImage,
         friendRequests,
         notifications,
         showAddFriend,
@@ -2891,6 +3084,8 @@ export function useDashboard() {
         showMessageOptions,
         setShowMessageOptions,
         handleSendMessage,
+        handleImageSelect,
+        handleCancelUpload,
         handleAddFriend,
         handleAcceptFriendRequest,
         handleRejectFriendRequest,

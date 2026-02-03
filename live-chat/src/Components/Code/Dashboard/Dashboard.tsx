@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom';
 export function Dashboard() {
     const navigate = useNavigate();
     const messageOptionsRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
+    const fileInputRef = useRef<HTMLInputElement>(null);
     const {
         friends,
         selectedFriend,
@@ -13,6 +14,12 @@ export function Dashboard() {
         messages,
         messageInput,
         setMessageInput,
+        // Image upload state
+        selectedImage,
+        setSelectedImage,
+        imagePreview,
+        setImagePreview,
+        uploadingImage,
         friendRequests,
         notifications,
         showAddFriend,
@@ -43,6 +50,8 @@ export function Dashboard() {
         messagesEndRef,
         chatContainerRef,
         handleSendMessage,
+        handleImageSelect,
+        handleCancelUpload,
         handleAddFriend,
         handleAcceptFriendRequest,
         handleRejectFriendRequest,
@@ -681,7 +690,21 @@ export function Dashboard() {
                                                                 ) : (
                                                                     // Normal Message
                                                                     <>
-                                                                        <p>{message.content}</p>
+                                                                        {/* Image Display */}
+                                                                        {message.imageUrl && (
+                                                                            <div className="message-image-container">
+                                                                                <img 
+                                                                                    src={message.imageUrl} 
+                                                                                    alt="Message image" 
+                                                                                    className="message-image"
+                                                                                    loading="lazy"
+                                                                                />
+                                                                            </div>
+                                                                        )}
+                                                                        {/* Text Content - shfaqet poshtë fotos nëse ka foto, ose normalisht nëse nuk ka */}
+                                                                        {message.content && (
+                                                                            <p className={message.imageUrl ? 'message-text-with-image' : ''}>{message.content}</p>
+                                                                        )}
                                                                         <div className="message-footer">
                                                                             <span className="message-time">
                                                                                 {new Date(message.timestamp).toLocaleTimeString([], {
@@ -727,20 +750,103 @@ export function Dashboard() {
                             <div ref={messagesEndRef}></div>
                         </div>
 
+                        {/* Image Preview (before message input) */}
+                        {imagePreview && (
+                            <div className="image-preview-container">
+                                <div className="image-preview-wrapper">
+                                    {uploadingImage && (
+                                        <div className="image-upload-loading">
+                                            <div className="loading-spinner"></div>
+                                        </div>
+                                    )}
+                                    <img 
+                                        src={imagePreview} 
+                                        alt="Preview" 
+                                        className={`image-preview-thumbnail ${uploadingImage ? 'uploading' : ''}`}
+                                    />
+                                    {uploadingImage ? (
+                                        // Cancel button gjatë upload-it
+                                        <button
+                                            type="button"
+                                            className="image-preview-cancel"
+                                            onClick={handleCancelUpload}
+                                            title="Cancel upload"
+                                        >
+                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                <line x1="18" y1="6" x2="6" y2="18"></line>
+                                                <line x1="6" y1="6" x2="18" y2="18"></line>
+                                            </svg>
+                                        </button>
+                                    ) : (
+                                        // Remove button kur nuk po upload-ohet
+                                        <button
+                                            type="button"
+                                            className="image-preview-remove"
+                                            onClick={() => {
+                                                // Pastro preview dhe state
+                                                if (imagePreview) {
+                                                    URL.revokeObjectURL(imagePreview);
+                                                }
+                                                setImagePreview(null);
+                                                setSelectedImage(null);
+                                            }}
+                                            title="Remove image"
+                                        >
+                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                <line x1="18" y1="6" x2="6" y2="18"></line>
+                                                <line x1="6" y1="6" x2="18" y2="18"></line>
+                                            </svg>
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
                         {/* Message Input */}
                         <form className="message-input-form" onSubmit={handleSendMessage}>
+                            {/* Hidden file input */}
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                accept="image/*"
+                                style={{ display: 'none' }}
+                                onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) {
+                                        handleImageSelect(file);
+                                    }
+                                    // Reset input value për të lejuar zgjedhjen e të njëjtit file përsëri
+                                    e.target.value = '';
+                                }}
+                            />
+                            {/* Plus button for image upload */}
+                            <button
+                                type="button"
+                                className="add-image-button"
+                                onClick={() => fileInputRef.current?.click()}
+                                title="Add image"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                                </svg>
+                            </button>
                             <input
                                 type="text"
-                                placeholder="Type a message..."
+                                placeholder={imagePreview ? "Add a caption..." : "Type a message..."}
                                 value={messageInput}
                                 onChange={(e) => setMessageInput(e.target.value)}
                                 className="message-input"
                             />
-                            <button type="submit" className="send-button" disabled={!messageInput.trim()}>
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                    <line x1="22" y1="2" x2="11" y2="13"></line>
-                                    <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-                                </svg>
+                            <button type="submit" className="send-button" disabled={(!messageInput.trim() && !selectedImage) || uploadingImage}>
+                                {uploadingImage ? (
+                                    <div className="loading-spinner-small"></div>
+                                ) : (
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <line x1="22" y1="2" x2="11" y2="13"></line>
+                                        <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                                    </svg>
+                                )}
                             </button>
                         </form>
                     </>
