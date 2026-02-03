@@ -149,6 +149,7 @@ const getMessages = async (req, res) => {
         receiverId: message.receiverId._id.toString(),
         content: message.content,
         imageUrl: message.imageUrl || null,
+        audioUrl: message.audioUrl || null,
         timestamp: message.createdAt,
         isRead: message.isRead,
         readAt: message.readAt || null,
@@ -180,15 +181,15 @@ const getMessages = async (req, res) => {
 // @access  Private
 const sendMessage = async (req, res) => {
   try {
-    const { receiverId, content, imageUrl } = req.body;
+    const { receiverId, content, imageUrl, audioUrl } = req.body;
 
     if (!receiverId) {
       return res.status(400).json({ message: 'Receiver ID is required' });
     }
 
-    // Mesazhi duhet të ketë ose content ose imageUrl (ose të dyja)
-    if (!content && !imageUrl) {
-      return res.status(400).json({ message: 'Message must have either content or imageUrl' });
+    // Mesazhi duhet të ketë ose content, ose imageUrl, ose audioUrl (ose kombinime)
+    if (!content && !imageUrl && !audioUrl) {
+      return res.status(400).json({ message: 'Message must have either content, imageUrl, or audioUrl' });
     }
 
     // ============================================
@@ -212,6 +213,27 @@ const sendMessage = async (req, res) => {
       }
     }
 
+    // ============================================
+    // VALIDATE AUDIO URL
+    // ============================================
+    // Nëse ka audioUrl, validoj që është valid URL
+    if (audioUrl) {
+      if (typeof audioUrl !== 'string' || audioUrl.trim().length === 0) {
+        return res.status(400).json({ message: 'Invalid audioUrl provided' });
+      }
+      
+      // Validim bazik për URL format
+      try {
+        const url = new URL(audioUrl);
+        // Kontrollo që URL është HTTP ose HTTPS
+        if (!['http:', 'https:'].includes(url.protocol)) {
+          return res.status(400).json({ message: 'Audio URL must use http or https protocol' });
+        }
+      } catch (urlError) {
+        return res.status(400).json({ message: 'Invalid audioUrl format' });
+      }
+    }
+
     // Nëse ka content, validoj dhe sanitizo
     let sanitizedContent = '';
     if (content) {
@@ -226,9 +248,16 @@ const sendMessage = async (req, res) => {
       sanitizedContent = sanitizeMessage(content);
       
       if (!sanitizedContent || sanitizedContent.trim().length === 0) {
-        return res.status(400).json({ message: 'Message content is invalid or contains only unsafe characters' });
+        // Nëse ka content por pas sanitizimit është bosh, kontrollo nëse ka imageUrl ose audioUrl
+        if (!imageUrl && !audioUrl) {
+          // Nëse nuk ka imageUrl ose audioUrl, kjo është gabim
+          return res.status(400).json({ message: 'Message content is invalid or contains only unsafe characters' });
+        }
+        // Nëse ka imageUrl ose audioUrl, lejo mesazh pa content
+        sanitizedContent = '';
+      } else {
+        sanitizedContent = sanitizedContent.trim();
       }
-      sanitizedContent = sanitizedContent.trim();
     }
 
     // Verify current user exists
@@ -286,8 +315,9 @@ const sendMessage = async (req, res) => {
     const message = new Message({
       senderId: senderId,
       receiverId: receiverId,
-      content: sanitizedContent || '', // Mund të jetë bosh nëse ka vetëm foto
+      content: sanitizedContent || '', // Mund të jetë bosh nëse ka vetëm foto ose audio
       imageUrl: imageUrl || null,
+      audioUrl: audioUrl || null,
       isRead: false,
     });
 
@@ -338,6 +368,7 @@ const sendMessage = async (req, res) => {
       receiverId: savedMessage.receiverId._id.toString(),
       content: savedMessage.content,
       imageUrl: savedMessage.imageUrl || null,
+      audioUrl: savedMessage.audioUrl || null,
       timestamp: savedMessage.createdAt,
       isRead: savedMessage.isRead,
       deliveredAt: savedMessage.deliveredAt || null,
@@ -650,6 +681,34 @@ const uploadChatPhoto = async (req, res) => {
   }
 };
 
+// @desc    Upload voice message
+// @route   POST /api/messages/upload-voice
+// @access  Private
+const uploadVoiceMessage = async (req, res) => {
+  try {
+    // Verify current user exists
+    if (!req.user || !req.user._id) {
+      return res.status(401).json({ message: 'User not authenticated' });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ message: 'No audio file uploaded' });
+    }
+
+    // Get the file path from multer
+    const audioPath = `/uploads/voice-messages/${req.file.filename}`;
+    const fullAudioUrl = `${req.protocol}://${req.get('host')}${audioPath}`;
+
+    return res.status(200).json({
+      message: 'Voice message uploaded successfully',
+      audioUrl: fullAudioUrl,
+    });
+  } catch (error) {
+    console.error('Upload voice message error:', error);
+    return res.status(500).json({ message: 'Server error' });
+  }
+};
+
 module.exports = {
   getMessages,
   sendMessage,
@@ -657,5 +716,6 @@ module.exports = {
   markMessageAsRead,
   deleteConversation,
   uploadChatPhoto,
+  uploadVoiceMessage,
 };
 

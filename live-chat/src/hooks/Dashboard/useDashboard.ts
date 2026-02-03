@@ -23,6 +23,7 @@ interface Message {
     receiverId: string;
     content: string;
     imageUrl?: string | null; // URL e fotos nëse mesazhi ka foto
+    audioUrl?: string | null; // URL e audio-së nëse mesazhi ka audio
     timestamp: Date;
     isRead: boolean;
     readAt?: Date; // Koha kur mesazhi u lexua
@@ -74,6 +75,24 @@ export function useDashboard() {
     const [imagePreview, setImagePreview] = useState<string | null>(null);
     const [uploadingImage, setUploadingImage] = useState(false);
     const uploadAbortControllerRef = useRef<AbortController | null>(null);
+    
+    // Voice recording state
+    const [isRecording, setIsRecording] = useState(false);
+    const [recordingTime, setRecordingTime] = useState(0); // Koha në sekonda
+    const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
+    const [audioPreview, setAudioPreview] = useState<string | null>(null); // URL për preview
+    const [audioDuration, setAudioDuration] = useState<number>(0); // Duration në sekonda
+    const [uploadingAudio, setUploadingAudio] = useState(false);
+    const [waveformData, setWaveformData] = useState<number[]>([]); // Waveform data për visualization
+    const MAX_RECORDING_TIME = 300; // 5 minuta në sekonda
+    const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+    const audioStreamRef = useRef<MediaStream | null>(null);
+    const recordingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const audioContextRef = useRef<AudioContext | null>(null);
+    const analyserRef = useRef<AnalyserNode | null>(null);
+    const waveformIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const monitoringAudioRef = useRef<HTMLAudioElement | null>(null); // Për monitoring të zërit
+    const audioUploadAbortControllerRef = useRef<AbortController | null>(null);
     const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([]);
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [blockedUserIds, setBlockedUserIds] = useState<string[]>([]);
@@ -490,6 +509,7 @@ export function useDashboard() {
                     receiverId: message.receiverId === user?.id ? 'current' : message.receiverId,
                     content: message.content,
                     imageUrl: message.imageUrl || null,
+                    audioUrl: message.audioUrl || null,
                     timestamp: new Date(message.timestamp),
                     isRead: message.isRead,
                     readAt: message.readAt ? new Date(message.readAt) : undefined,
@@ -1315,6 +1335,7 @@ export function useDashboard() {
                         receiverId: msg.receiverId === user.id ? 'current' : msg.receiverId,
                         content: msg.content,
                         imageUrl: msg.imageUrl || null,
+                        audioUrl: msg.audioUrl || null,
                         timestamp: new Date(msg.timestamp),
                         isRead: msg.isRead,
                         readAt: msg.readAt ? new Date(msg.readAt) : undefined,
@@ -1454,6 +1475,8 @@ export function useDashboard() {
                     senderId: msg.senderId === user.id ? 'current' : msg.senderId,
                     receiverId: msg.receiverId === user.id ? 'current' : msg.receiverId,
                     content: msg.content,
+                    imageUrl: msg.imageUrl || null,
+                    audioUrl: msg.audioUrl || null,
                     timestamp: new Date(msg.timestamp),
                     isRead: msg.isRead,
                     readAt: msg.readAt ? new Date(msg.readAt) : undefined,
@@ -1742,13 +1765,438 @@ export function useDashboard() {
     };
 
     // ============================================
+    // AUDIO COMPRESSION (Simplified)
+    // ============================================
+    // Kompresim i thjeshtë: nëse audio është më i madh se 5MB, trego warning
+    // MediaRecorder tashmë përdor kompresim automatik (webm format)
+    const compressAudio = async (audioBlob: Blob): Promise<Blob> => {
+        // Nëse audio është më i madh se 5MB, trego warning
+        const maxSize = 5 * 1024 * 1024; // 5MB
+        if (audioBlob.size > maxSize) {
+            setErrorMessage(`Audio file is large (${(audioBlob.size / 1024 / 1024).toFixed(2)}MB). Upload may take longer.`);
+            setTimeout(() => setErrorMessage(null), 5000);
+        }
+        
+        // MediaRecorder tashmë përdor kompresim automatik me webm format
+        // Nëse dëshiron kompresim më agresiv, mund të përdorësh MediaRecorder me bitrate më të ulët
+        // Por për tani, le ta lëmë si është sepse webm është tashmë i kompresuar mirë
+        return audioBlob;
+    };
+
+    // ============================================
+    // AUDIO UPLOAD HANDLER
+    // ============================================
+    const handleAudioUpload = async (audioBlob: Blob): Promise<string | null> => {
+        try {
+            setUploadingAudio(true);
+            setErrorMessage(null);
+
+            const token = getToken();
+            if (!token) {
+                setErrorMessage('You must be logged in to upload voice message');
+                setTimeout(() => setErrorMessage(null), 5000);
+                return null;
+            }
+
+            // Kompreso audio para upload
+            const compressedBlob = await compressAudio(audioBlob);
+
+            // Krijo AbortController për cancel upload
+            const abortController = new AbortController();
+            audioUploadAbortControllerRef.current = abortController;
+
+            // Krijo FormData
+            const formData = new FormData();
+            // Krijo File object nga Blob për të ruajtur emrin e file-it
+            const audioFile = new File([compressedBlob], 'voice-message.webm', { type: compressedBlob.type || 'audio/webm' });
+            formData.append('voice', audioFile);
+
+            // POST në /api/messages/upload-voice
+            const response = await fetch(`${API_URL}/api/messages/upload-voice`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                },
+                body: formData,
+                signal: abortController.signal, // Shto signal për cancel
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                setErrorMessage(errorData.message || 'Failed to upload voice message');
+                setTimeout(() => setErrorMessage(null), 5000);
+                return null;
+            }
+
+            // Merr URL-në e audio-së
+            const data = await response.json();
+            const audioUrl = data.audioUrl;
+
+            // Pastro abort controller pas suksesit
+            audioUploadAbortControllerRef.current = null;
+            return audioUrl;
+        } catch (error: any) {
+            // Kontrollo nëse është cancel error
+            if (error.name === 'AbortError') {
+                console.log('Audio upload cancelled by user');
+                // Mos shfaq error message për cancel
+                return null;
+            }
+            
+            console.error('Audio upload error:', error);
+            setErrorMessage('Something went wrong. Please try again.');
+            setTimeout(() => setErrorMessage(null), 5000);
+            return null;
+        } finally {
+            setUploadingAudio(false);
+            audioUploadAbortControllerRef.current = null;
+        }
+    };
+
+    // ============================================
+    // VOICE RECORDING HANDLERS
+    // ============================================
+    const startVoiceRecording = async () => {
+        try {
+            // Pastro audio preview nëse ka një të vjetër
+            if (audioPreview) {
+                URL.revokeObjectURL(audioPreview);
+                setAudioPreview(null);
+            }
+            setAudioBlob(null);
+
+            // Kërko leje për mikrofon me echo cancellation për monitoring më të mirë
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true
+                }
+            });
+            audioStreamRef.current = stream;
+
+            // ============================================
+            // AUDIO MONITORING (dëgjo zërin tënd në real-time)
+            // ============================================
+            // Krijo AudioContext për monitoring
+            try {
+                const monitoringContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+                
+                // Krijo source nga stream
+                const source = monitoringContext.createMediaStreamSource(stream);
+                const gainNode = monitoringContext.createGain();
+                gainNode.gain.value = 0.4; // Volume më i ulët për të shmangur feedback (40%)
+                
+                // Lidh source me destination për monitoring
+                source.connect(gainNode);
+                gainNode.connect(monitoringContext.destination);
+                
+                // Ruaj reference për cleanup
+                (monitoringAudioRef as any).current = {
+                    context: monitoringContext,
+                    source: source,
+                    gainNode: gainNode
+                };
+            } catch (monitoringError) {
+                console.warn('Audio monitoring setup failed:', monitoringError);
+                // Vazhdoj pa monitoring nëse dështon - regjistrimi funksionon edhe pa monitoring
+            }
+
+            // Krijo MediaRecorder instance
+            const mediaRecorder = new MediaRecorder(stream, {
+                mimeType: MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4'
+            });
+            mediaRecorderRef.current = mediaRecorder;
+
+            const chunks: Blob[] = [];
+
+            // Kur të ketë data, ruaje në chunks
+            mediaRecorder.ondataavailable = (event) => {
+                if (event.data.size > 0) {
+                    chunks.push(event.data);
+                }
+            };
+
+            // Kur të përfundojë regjistrimi, krijoni Blob
+            mediaRecorder.onstop = () => {
+                if (chunks.length > 0) {
+                    const audioBlob = new Blob(chunks, { type: mediaRecorder.mimeType });
+                    
+                    // Validim: kontrollo nëse Blob ka përmbajtje
+                    if (audioBlob.size > 0) {
+                        setAudioBlob(audioBlob);
+                        
+                        // Krijo preview URL për audio
+                        const audioUrl = URL.createObjectURL(audioBlob);
+                        setAudioPreview(audioUrl);
+                        
+                        // Set duration nga recording time
+                        setAudioDuration(recordingTime);
+                        
+                        // Krijo audio element për të marrë duration të saktë
+                        const audio = new Audio(audioUrl);
+                        audio.addEventListener('loadedmetadata', () => {
+                            setAudioDuration(Math.floor(audio.duration));
+                        });
+                    } else {
+                        setErrorMessage('Recording failed. Please try again.');
+                        setTimeout(() => setErrorMessage(null), 3000);
+                    }
+                } else {
+                    setErrorMessage('No audio data recorded. Please try again.');
+                    setTimeout(() => setErrorMessage(null), 3000);
+                }
+            };
+
+            // Fillo regjistrimin
+            mediaRecorder.start();
+            setIsRecording(true);
+            setRecordingTime(0);
+
+            // Start timer për recording time
+            recordingIntervalRef.current = setInterval(() => {
+                setRecordingTime(prev => {
+                    const newTime = prev + 1;
+                    // Nëse ka arritur limit-in maksimal, ndalo regjistrimin automatikisht
+                    if (newTime >= MAX_RECORDING_TIME) {
+                        stopVoiceRecording();
+                        setErrorMessage(`Maximum recording time reached (${MAX_RECORDING_TIME / 60} minutes).`);
+                        setTimeout(() => setErrorMessage(null), 3000);
+                        return MAX_RECORDING_TIME;
+                    }
+                    return newTime;
+                });
+            }, 1000);
+
+            // ============================================
+            // WAVEFORM VISUALIZATION SETUP
+            // ============================================
+            // Krijo AudioContext për waveform visualization
+            try {
+                const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+                audioContextRef.current = audioContext;
+                
+                const analyser = audioContext.createAnalyser();
+                analyser.fftSize = 256;
+                analyserRef.current = analyser;
+                
+                const source = audioContext.createMediaStreamSource(stream);
+                source.connect(analyser);
+                
+                // Start waveform data collection
+                const dataArray = new Uint8Array(analyser.frequencyBinCount);
+                waveformIntervalRef.current = setInterval(() => {
+                    if (analyserRef.current) {
+                        analyserRef.current.getByteFrequencyData(dataArray);
+                        // Konverto në array normal dhe normalizo (0-100)
+                        const normalizedData = Array.from(dataArray).slice(0, 50).map(value => (value / 255) * 100);
+                        setWaveformData(normalizedData);
+                    }
+                }, 100); // Update çdo 100ms për animacion të qetë
+            } catch (waveformError) {
+                console.warn('Waveform visualization not available:', waveformError);
+                // Nëse waveform nuk funksionon, vazhdoj pa të
+            }
+
+        } catch (error: any) {
+            console.error('Error starting voice recording:', error);
+            if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+                setErrorMessage('Microphone permission denied. Please allow microphone access to record voice messages.');
+            } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
+                setErrorMessage('No microphone found. Please connect a microphone to record voice messages.');
+            } else {
+                setErrorMessage('Failed to start recording. Please try again.');
+            }
+            setTimeout(() => setErrorMessage(null), 5000);
+            
+            // Pastro state nëse ka gabim
+            if (monitoringAudioRef.current) {
+                try {
+                    const monitoring = monitoringAudioRef.current as any;
+                    if (monitoring.source) {
+                        monitoring.source.disconnect();
+                    }
+                    if (monitoring.gainNode) {
+                        monitoring.gainNode.disconnect();
+                    }
+                    if (monitoring.context) {
+                        monitoring.context.close().catch(() => {});
+                    }
+                } catch (error) {
+                    console.warn('Error cleaning up audio monitoring:', error);
+                }
+                monitoringAudioRef.current = null;
+            }
+            if (audioStreamRef.current) {
+                audioStreamRef.current.getTracks().forEach(track => track.stop());
+                audioStreamRef.current = null;
+            }
+            mediaRecorderRef.current = null;
+        }
+    };
+
+    const stopVoiceRecording = () => {
+        if (mediaRecorderRef.current && isRecording) {
+            // Validim: kontrollo nëse regjistrimi është më i gjatë se 1 sekondë
+            if (recordingTime < 1) {
+                setErrorMessage('Recording is too short. Please record at least 1 second.');
+                setTimeout(() => setErrorMessage(null), 3000);
+                // Cancel regjistrimin nëse është shumë i shkurtër
+                cancelVoiceRecording();
+                return;
+            }
+
+            // Nëse po regjistrohet, ndalo regjistrimin
+            if (mediaRecorderRef.current.state === 'recording') {
+                mediaRecorderRef.current.stop();
+            }
+            
+            // Stop audio monitoring
+            if (monitoringAudioRef.current) {
+                try {
+                    const monitoring = monitoringAudioRef.current as any;
+                    if (monitoring.source) {
+                        monitoring.source.disconnect();
+                    }
+                    if (monitoring.gainNode) {
+                        monitoring.gainNode.disconnect();
+                    }
+                    if (monitoring.context) {
+                        monitoring.context.close().catch(() => {});
+                    }
+                } catch (error) {
+                    console.warn('Error stopping audio monitoring:', error);
+                }
+                monitoringAudioRef.current = null;
+            }
+            
+            // Stop audio stream tracks
+            if (audioStreamRef.current) {
+                audioStreamRef.current.getTracks().forEach(track => track.stop());
+                audioStreamRef.current = null;
+            }
+            
+            // Stop timer
+            if (recordingIntervalRef.current) {
+                clearInterval(recordingIntervalRef.current);
+                recordingIntervalRef.current = null;
+            }
+            
+            // Stop waveform visualization
+            if (waveformIntervalRef.current) {
+                clearInterval(waveformIntervalRef.current);
+                waveformIntervalRef.current = null;
+            }
+            if (audioContextRef.current) {
+                audioContextRef.current.close().catch(() => {});
+                audioContextRef.current = null;
+            }
+            analyserRef.current = null;
+            setWaveformData([]);
+            
+            setIsRecording(false);
+        }
+    };
+
+    const cancelVoiceRecording = () => {
+        // Stop recording nëse po regjistrohet
+        if (isRecording) {
+            stopVoiceRecording();
+        }
+        
+        // Stop audio monitoring
+        if (monitoringAudioRef.current) {
+            try {
+                const monitoring = monitoringAudioRef.current as any;
+                if (monitoring.source) {
+                    monitoring.source.disconnect();
+                }
+                if (monitoring.gainNode) {
+                    monitoring.gainNode.disconnect();
+                }
+                if (monitoring.context) {
+                    monitoring.context.close().catch(() => {});
+                }
+            } catch (error) {
+                console.warn('Error stopping audio monitoring:', error);
+            }
+            monitoringAudioRef.current = null;
+        }
+        
+        // Pastro audio blob dhe preview
+        if (audioPreview) {
+            URL.revokeObjectURL(audioPreview);
+        }
+        setAudioBlob(null);
+        setAudioPreview(null);
+        setRecordingTime(0);
+        setAudioDuration(0);
+        setWaveformData([]);
+        
+        // Pastro audio context
+        if (waveformIntervalRef.current) {
+            clearInterval(waveformIntervalRef.current);
+            waveformIntervalRef.current = null;
+        }
+        if (audioContextRef.current) {
+            audioContextRef.current.close().catch(() => {});
+            audioContextRef.current = null;
+        }
+        analyserRef.current = null;
+    };
+
+    // Cleanup effect për voice recording
+    useEffect(() => {
+        return () => {
+            // Pastro audio stream dhe timer kur komponenti unmount-ohet
+            if (audioStreamRef.current) {
+                audioStreamRef.current.getTracks().forEach(track => track.stop());
+                audioStreamRef.current = null;
+            }
+            if (recordingIntervalRef.current) {
+                clearInterval(recordingIntervalRef.current);
+                recordingIntervalRef.current = null;
+            }
+            if (waveformIntervalRef.current) {
+                clearInterval(waveformIntervalRef.current);
+                waveformIntervalRef.current = null;
+            }
+            if (audioContextRef.current) {
+                audioContextRef.current.close().catch(() => {});
+                audioContextRef.current = null;
+            }
+            analyserRef.current = null;
+            if (monitoringAudioRef.current) {
+                try {
+                    const monitoring = monitoringAudioRef.current as any;
+                    if (monitoring.source) {
+                        monitoring.source.disconnect();
+                    }
+                    if (monitoring.gainNode) {
+                        monitoring.gainNode.disconnect();
+                    }
+                    if (monitoring.context) {
+                        monitoring.context.close().catch(() => {});
+                    }
+                } catch (error) {
+                    console.warn('Error cleaning up audio monitoring:', error);
+                }
+                monitoringAudioRef.current = null;
+            }
+            if (audioPreview) {
+                URL.revokeObjectURL(audioPreview);
+            }
+        };
+    }, [audioPreview]);
+
+    // ============================================
     // SEND MESSAGE VIA SOCKET
     // ============================================
     const handleSendMessage = async (e: React.FormEvent) => {
         e.preventDefault();
         
-        // Mesazhi duhet të ketë ose content ose image (ose të dyja)
-        if ((!messageInput.trim() && !selectedImage) || !selectedFriend) {
+        // Mesazhi duhet të ketë ose content, ose image, ose audio (ose kombinime)
+        if ((!messageInput.trim() && !selectedImage && !audioBlob) || !selectedFriend) {
             return;
         }
 
@@ -1763,7 +2211,9 @@ export function useDashboard() {
 
         const messageContent = messageInput.trim();
         let imageUrl: string | null = null;
+        let audioUrl: string | null = null;
         const localPreviewUrl = imagePreview; // Ruaj preview lokal për optimistic update
+        const localAudioPreviewUrl = audioPreview; // Ruaj preview lokal për optimistic update
 
         // ============================================
         // OPTIMISTIC UPDATE (para upload)
@@ -1771,13 +2221,14 @@ export function useDashboard() {
         // Shto mesazhin optimistikisht në state me preview lokal për UI të shpejtë
         const tempId = `temp-${Date.now()}`; // Temporary ID për optimistic update
         
-        // Krijo optimistic message me preview lokal nëse ka foto
+        // Krijo optimistic message me preview lokal nëse ka foto ose audio
         const optimisticMessage: Message = {
             id: tempId,
             senderId: 'current',
             receiverId: selectedFriend.id,
             content: messageContent,
             imageUrl: localPreviewUrl || null, // Përdor preview lokal për optimistic update
+            audioUrl: localAudioPreviewUrl || null, // Përdor preview lokal për optimistic update
             timestamp: new Date(),
             isRead: false
         };
@@ -1801,8 +2252,13 @@ export function useDashboard() {
                 if (localPreviewUrl) {
                     URL.revokeObjectURL(localPreviewUrl);
                 }
+                if (localAudioPreviewUrl) {
+                    URL.revokeObjectURL(localAudioPreviewUrl);
+                }
                 setImagePreview(null);
                 setSelectedImage(null);
+                setAudioPreview(null);
+                setAudioBlob(null);
                 return;
             }
             
@@ -1829,6 +2285,47 @@ export function useDashboard() {
             }
             setImagePreview(null);
             setSelectedImage(null);
+        }
+
+        // ============================================
+        // UPLOAD AUDIO IF RECORDED
+        // ============================================
+        // Nëse ka audio të regjistruar, upload-o pas optimistic update
+        if (audioBlob) {
+            audioUrl = await handleAudioUpload(audioBlob);
+            // Nëse upload dështoi, hiq optimistic message, pastro preview dhe ndalo dërgimin
+            if (!audioUrl) {
+                setMessages(prev => prev.filter(msg => msg.id !== tempId));
+                // Pastro preview dhe state nëse upload dështoi
+                if (localAudioPreviewUrl) {
+                    URL.revokeObjectURL(localAudioPreviewUrl);
+                }
+                if (localPreviewUrl) {
+                    URL.revokeObjectURL(localPreviewUrl);
+                }
+                setAudioPreview(null);
+                setAudioBlob(null);
+                setImagePreview(null);
+                setSelectedImage(null);
+                return;
+            }
+            
+            // Përditëso optimistic message me URL-në e serverit
+            setMessages(prev => 
+                prev.map(msg => 
+                    msg.id === tempId 
+                        ? { ...msg, audioUrl: audioUrl || null }
+                        : msg
+                )
+            );
+            
+            // Pastro preview dhe state pas upload-it të suksesshëm
+            // Preview URL do të zëvendësohet me URL-në e serverit në optimistic message
+            if (localAudioPreviewUrl) {
+                URL.revokeObjectURL(localAudioPreviewUrl);
+            }
+            setAudioPreview(null);
+            setAudioBlob(null);
         }
         
         // Scroll menjëherë në fund pas shtimit të mesazhit optimistik
@@ -1857,8 +2354,9 @@ export function useDashboard() {
         // Dërgo mesazhin përmes socket
         socket.emit('send_message', {
             receiverId: selectedFriend.id,
-            content: messageContent || '', // Mund të jetë bosh nëse ka vetëm foto
+            content: messageContent || '', // Mund të jetë bosh nëse ka vetëm foto ose audio
             imageUrl: imageUrl || undefined,
+            audioUrl: audioUrl || undefined,
         });
 
         // ============================================
@@ -1873,6 +2371,7 @@ export function useDashboard() {
                 receiverId: data.data.receiverId === user?.id ? 'current' : data.data.receiverId,
                 content: data.data.content,
                 imageUrl: data.data.imageUrl || null,
+                audioUrl: data.data.audioUrl || null,
                 timestamp: new Date(data.data.timestamp),
                 isRead: data.data.isRead,
                 deliveredAt: data.data.deliveredAt ? new Date(data.data.deliveredAt) : undefined,
@@ -3086,6 +3585,18 @@ export function useDashboard() {
         handleSendMessage,
         handleImageSelect,
         handleCancelUpload,
+        // Voice recording state and functions
+        isRecording,
+        recordingTime,
+        audioBlob,
+        audioPreview,
+        audioDuration,
+        uploadingAudio,
+        waveformData,
+        MAX_RECORDING_TIME,
+        startVoiceRecording,
+        stopVoiceRecording,
+        cancelVoiceRecording,
         handleAddFriend,
         handleAcceptFriendRequest,
         handleRejectFriendRequest,

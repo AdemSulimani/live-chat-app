@@ -6,6 +6,7 @@ const {
   markMessageAsRead,
   deleteConversation,
   uploadChatPhoto,
+  uploadVoiceMessage,
 } = require('../controllers/messageController');
 const { protect } = require('../middleware/authMiddleware');
 const { messageLimiter } = require('../middleware/rateLimiter');
@@ -19,6 +20,12 @@ const router = express.Router();
 const chatPhotosDir = path.join(__dirname, '..', 'uploads', 'chat-photos');
 if (!fs.existsSync(chatPhotosDir)) {
   fs.mkdirSync(chatPhotosDir, { recursive: true });
+}
+
+// Create voice messages directory if it doesn't exist
+const voiceMessagesDir = path.join(__dirname, '..', 'uploads', 'voice-messages');
+if (!fs.existsSync(voiceMessagesDir)) {
+  fs.mkdirSync(voiceMessagesDir, { recursive: true });
 }
 
 // Configure multer for chat photo uploads
@@ -54,11 +61,48 @@ const upload = multer({
   fileFilter: fileFilter,
 });
 
+// Configure multer for voice message uploads
+const voiceStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, voiceMessagesDir);
+  },
+  filename: (req, file, cb) => {
+    // Generate unique filename: userId-timestamp.extension
+    const uniqueSuffix = `${req.user._id}-${Date.now()}${path.extname(file.originalname)}`;
+    cb(null, uniqueSuffix);
+  },
+});
+
+// File filter - only allow audio formats
+const voiceFileFilter = (req, file, cb) => {
+  // Allow common audio formats
+  const allowedTypes = /mp3|webm|ogg|wav|m4a|aac/;
+  const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+  const mimetype = file.mimetype.startsWith('audio/');
+
+  if (mimetype && extname) {
+    return cb(null, true);
+  } else {
+    cb(new Error('Only audio files are allowed (mp3, webm, ogg, wav, m4a, aac)'));
+  }
+};
+
+const uploadVoice = multer({
+  storage: voiceStorage,
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB max file size për audio (më i madh se foto)
+  },
+  fileFilter: voiceFileFilter,
+});
+
 // Error handling middleware për multer
 const handleMulterError = (err, req, res, next) => {
   if (err instanceof multer.MulterError) {
     if (err.code === 'LIMIT_FILE_SIZE') {
-      return res.status(400).json({ message: 'File size too large. Maximum size is 5MB' });
+      // Kontrollo nëse është voice upload ose photo upload
+      const isVoiceUpload = req.route?.path === '/upload-voice';
+      const maxSize = isVoiceUpload ? '10MB' : '5MB';
+      return res.status(400).json({ message: `File size too large. Maximum size is ${maxSize}` });
     }
     return res.status(400).json({ message: 'File upload error: ' + err.message });
   }
@@ -73,6 +117,9 @@ router.use(protect);
 
 // Upload chat photo - must be before POST / route to avoid conflicts
 router.post('/upload-photo', upload.single('photo'), handleMulterError, uploadChatPhoto);
+
+// Upload voice message - must be before POST / route to avoid conflicts
+router.post('/upload-voice', uploadVoice.single('voice'), handleMulterError, uploadVoiceMessage);
 
 // Send a message - me rate limiting për të shmangur spam
 router.post('/', messageLimiter, sendMessage);
