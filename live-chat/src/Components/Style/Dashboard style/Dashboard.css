@@ -9,21 +9,22 @@
 /* Sidebar Styles */
 .dashboard-sidebar {
     width: 320px;
-    background: linear-gradient(180deg, #f8f9fa 0%, #f0f2f5 100%);
-    border-right: 1px solid #d0d0d0;
+    background: linear-gradient(180deg, #ffffff 0%, #f8f9fa 100%);
+    border-right: 1px solid rgba(0, 0, 0, 0.08);
     display: flex;
     flex-direction: column;
     overflow-y: auto;
     overflow-x: hidden;
-    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.05);
+    box-shadow: 4px 0 20px rgba(0, 0, 0, 0.04);
 }
 
 /* Mini Profile Section */
 .mini-profile-section {
     padding: 20px;
-    border-bottom: 1px solid #d0d0d0;
-    background-color: transparent;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    background: linear-gradient(135deg, rgba(37, 211, 102, 0.03) 0%, rgba(18, 140, 126, 0.03) 100%);
     color: var(--black);
+    backdrop-filter: blur(10px);
 }
 
 .mini-profile-header {
@@ -40,15 +41,23 @@
 
 .mini-profile-avatar {
     position: relative;
-    width: 50px;
-    height: 50px;
+    width: 56px;
+    height: 56px;
     border-radius: 50%;
     overflow: hidden;
-    background-color: #e0e0e0;
+    background: linear-gradient(135deg, #e0e0e0 0%, #f0f0f0 100%);
     display: flex;
     align-items: center;
     justify-content: center;
-    border: 2px solid #d0d0d0;
+    border: 3px solid rgba(37, 211, 102, 0.2);
+    box-shadow: 0 2px 8px rgba(37, 211, 102, 0.15);
+    transition: all 0.3s ease;
+}
+
+.mini-profile-header:hover .mini-profile-avatar {
+    border-color: rgba(37, 211, 102, 0.4);
+    transform: scale(1.05);
+    box-shadow: 0 4px 12px rgba(37, 211, 102, 0.25);
 }
 
 .mini-profile-avatar img {
@@ -119,16 +128,18 @@
 }
 
 .mini-profile-name {
-    font-size: 16px;
-    font-weight: 600;
+    font-size: 17px;
+    font-weight: 700;
     margin: 0;
     color: var(--black);
+    letter-spacing: -0.3px;
 }
 
 .mini-profile-status {
-    font-size: 12px;
-    margin: 4px 0 0 0;
+    font-size: 13px;
+    margin: 6px 0 0 0;
     color: #666;
+    font-weight: 400;
 }
 
 .profile-toggle-btn {
@@ -197,36 +208,53 @@
 
 /* Sidebar Actions */
 .sidebar-actions {
-    padding: 15px 20px;
+    padding: 16px 20px;
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    border-bottom: 1px solid #d0d0d0;
-    background-color: rgba(255, 255, 255, 0.5);
+    gap: 10px;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.8) 0%, rgba(248, 249, 250, 0.6) 100%);
 }
 
 .action-btn {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 10px 12px;
-    background-color: var(--white);
-    border: 1px solid #e0e0e0;
-    border-radius: 20px;
+    gap: 12px;
+    padding: 12px 16px;
+    background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+    border: 1.5px solid rgba(0, 0, 0, 0.08);
+    border-radius: 12px;
     cursor: pointer;
-    font-size: 13px;
+    font-size: 14px;
+    font-weight: 500;
     color: var(--black);
-    transition: all 0.3s ease;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     position: relative;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
+    overflow: hidden;
+}
+
+.action-btn::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(37, 211, 102, 0.1), transparent);
+    transition: left 0.5s ease;
+}
+
+.action-btn:hover::before {
+    left: 100%;
 }
 
 .action-btn:hover {
-    background: linear-gradient(135deg, rgba(37, 211, 102, 0.1) 0%, rgba(18, 140, 126, 0.1) 100%);
-    border-color: var(--whatsappgreen);
+    background: linear-gradient(135deg, rgba(37, 211, 102, 0.12) 0%, rgba(18, 140, 126, 0.12) 100%);
+    border-color: rgba(37, 211, 102, 0.4);
     color: var(--darkgreen);
-    transform: translateY(-1px);
-    box-shadow: 0 3px 8px rgba(37, 211, 102, 0.15);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(37, 211, 102, 0.2);
 }
 
 .action-btn:active {
@@ -241,19 +269,29 @@
 
 .badge {
     margin-left: auto;
-    background-color: var(--whatsappgreen);
+    background: linear-gradient(135deg, var(--whatsappgreen) 0%, var(--darkgreen) 100%);
     color: var(--white);
-    border-radius: 50%;
-    width: 20px;
-    height: 20px;
+    border-radius: 12px;
+    min-width: 24px;
+    height: 24px;
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 11px;
-    font-weight: 600;
-    padding: 0;
-    min-width: 20px;
+    font-weight: 700;
+    padding: 0 8px;
     flex-shrink: 0;
+    box-shadow: 0 2px 6px rgba(37, 211, 102, 0.3);
+    animation: pulse-badge 2s ease-in-out infinite;
+}
+
+@keyframes pulse-badge {
+    0%, 100% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.05);
+    }
 }
 
 /* Add Friend Form */
@@ -357,12 +395,13 @@
 }
 
 .section-title {
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--black);
-    margin: 0 0 15px 0;
+    font-size: 13px;
+    font-weight: 700;
+    color: #666;
+    margin: 0 0 16px 0;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 1px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
 .empty-state {
@@ -375,14 +414,15 @@
 .friend-request-item {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 12px;
-    background-color: var(--white);
-    border-radius: 8px;
-    margin-bottom: 10px;
-    border: 1px solid #e0e0e0;
-    transition: all 0.3s ease;
+    gap: 14px;
+    padding: 14px;
+    background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+    border-radius: 12px;
+    margin-bottom: 12px;
+    border: 1.5px solid rgba(0, 0, 0, 0.08);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     cursor: pointer;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
 }
 
 .friend-request-item:hover {
@@ -393,15 +433,17 @@
 }
 
 .request-avatar {
-    width: 45px;
-    height: 45px;
+    width: 50px;
+    height: 50px;
     border-radius: 50%;
     overflow: hidden;
-    background-color: #e0e0e0;
+    background: linear-gradient(135deg, #e0e0e0 0%, #f0f0f0 100%);
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
+    border: 3px solid rgba(0, 0, 0, 0.08);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
 }
 
 .request-avatar img {
@@ -435,39 +477,45 @@
 
 .accept-btn,
 .reject-btn {
-    padding: 6px 12px;
+    padding: 8px 16px;
     border: none;
-    border-radius: 6px;
+    border-radius: 8px;
     cursor: pointer;
-    font-size: 12px;
-    transition: all 0.2s;
+    font-size: 13px;
+    font-weight: 600;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .accept-btn {
-    background-color: var(--whatsappgreen);
+    background: linear-gradient(135deg, var(--whatsappgreen) 0%, var(--darkgreen) 100%);
     color: var(--white);
 }
 
 .accept-btn:hover {
-    background-color: var(--darkgreen);
+    background: linear-gradient(135deg, var(--darkgreen) 0%, var(--whatsappgreen) 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(37, 211, 102, 0.3);
 }
 
 .reject-btn {
-    background-color: #e0e0e0;
+    background: linear-gradient(135deg, #e0e0e0 0%, #f0f0f0 100%);
     color: var(--black);
 }
 
 .reject-btn:hover {
-    background-color: #d0d0d0;
+    background: linear-gradient(135deg, #d0d0d0 0%, #e0e0e0 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
 }
 
 /* Notifications List */
 .notifications-list {
-    padding: 15px 20px;
-    border-bottom: 1px solid #d0d0d0;
-    max-height: 200px;
+    padding: 16px 20px;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    max-height: 220px;
     overflow-y: auto;
-    background-color: rgba(255, 255, 255, 0.5);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.6) 0%, rgba(248, 249, 250, 0.4) 100%);
 }
 
 .notifications-container {
@@ -477,13 +525,14 @@
 }
 
 .notification-item {
-    padding: 10px 12px;
-    background-color: var(--white);
-    border-radius: 6px;
+    padding: 12px 14px;
+    background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+    border-radius: 10px;
     cursor: pointer;
-    transition: all 0.3s ease;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     border-left: 3px solid transparent;
-    border: 1px solid transparent;
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
 .notification-item:hover {
@@ -494,8 +543,10 @@
 }
 
 .notification-item.unread {
-    background-color: #e8f5e9;
+    background: linear-gradient(135deg, rgba(37, 211, 102, 0.1) 0%, rgba(18, 140, 126, 0.08) 100%);
     border-left-color: var(--whatsappgreen);
+    border-left-width: 4px;
+    box-shadow: 0 2px 6px rgba(37, 211, 102, 0.15);
 }
 
 .notification-message {
@@ -512,36 +563,37 @@
 /* Friends List */
 .friends-list-section {
     flex: 1;
-    padding: 15px 20px;
+    padding: 16px 20px;
     overflow-y: auto;
-    background-color: rgba(255, 255, 255, 0.3);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.4) 0%, rgba(248, 249, 250, 0.2) 100%);
 }
 
 /* Settings Section */
 .settings-section {
-    padding: 15px 20px;
-    border-top: 1px solid #d0d0d0;
-    background-color: rgba(255, 255, 255, 0.5);
+    padding: 16px 20px;
+    border-top: 1px solid rgba(0, 0, 0, 0.06);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.8) 0%, rgba(248, 249, 250, 0.6) 100%);
     margin-top: auto;
     display: flex;
     justify-content: start;
     align-items: center;
+    backdrop-filter: blur(10px);
 }
 
 .settings-btn {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 40px;
-    height: 40px;
+    width: 44px;
+    height: 44px;
     padding: 0;
-    background-color: var(--white);
-    border: 1px solid #e0e0e0;
+    background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+    border: 2px solid rgba(0, 0, 0, 0.08);
     border-radius: 50%;
     cursor: pointer;
     color: var(--black);
-    transition: all 0.3s ease;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
 }
 
 .settings-btn:hover {
@@ -601,14 +653,10 @@
 }
 
 .friends-hint {
-    font-size: 12px;
-    color: #999;
-    margin: 0 0 15px 0;
-    padding: 8px 12px;
-    background-color: rgba(37, 211, 102, 0.1);
-    border-left: 3px solid var(--whatsappgreen);
-    border-radius: 4px;
-    font-style: italic;
+    font-size: 13px;
+    color: #666;
+    margin: 0 0 16px 0;
+    font-weight: 500;
 }
 
 .friends-list {
@@ -620,23 +668,29 @@
 .friend-item {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 12px;
-    border-radius: 10px;
+    gap: 14px;
+    padding: 14px;
+    border-radius: 12px;
     cursor: pointer;
-    transition: all 0.3s ease;
-    background-color: transparent;
-    border: 1px solid transparent;
-    margin: 2px 0;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.6) 0%, rgba(248, 249, 250, 0.4) 100%);
+    border: 1.5px solid rgba(0, 0, 0, 0.06);
+    margin: 4px 0;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
 .friend-item:hover {
-    border-color: rgba(37, 211, 102, 0.3);
+    border-color: rgba(37, 211, 102, 0.4);
+    background: linear-gradient(135deg, rgba(37, 211, 102, 0.1) 0%, rgba(18, 140, 126, 0.08) 100%);
+    transform: translateX(4px);
+    box-shadow: 0 4px 12px rgba(37, 211, 102, 0.15);
 }
 
 .friend-item.active {
-    border-left: 1px solid var(--whatsappgreen);
-    border-color: var(--whatsappgreen);
+    border-left: 4px solid var(--whatsappgreen);
+    border-color: rgba(37, 211, 102, 0.3);
+    background: linear-gradient(135deg, rgba(37, 211, 102, 0.15) 0%, rgba(18, 140, 126, 0.12) 100%);
+    box-shadow: 0 4px 16px rgba(37, 211, 102, 0.2);
 }
 
 .friend-item.active:hover {
@@ -645,25 +699,30 @@
 
 .friend-avatar {
     position: relative;
-    width: 45px;
-    height: 45px;
+    width: 50px;
+    height: 50px;
     border-radius: 50%;
     overflow: hidden;
-    background-color: #e0e0e0;
+    background: linear-gradient(135deg, #e0e0e0 0%, #f0f0f0 100%);
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    transition: border-color 0.3s ease;
-    border: 2px solid transparent;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    border: 3px solid rgba(0, 0, 0, 0.08);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
 }
 
 .friend-item:hover .friend-avatar {
-    border-color: rgba(37, 211, 102, 0.3);
+    border-color: rgba(37, 211, 102, 0.5);
+    transform: scale(1.08);
+    box-shadow: 0 4px 12px rgba(37, 211, 102, 0.25);
 }
 
 .friend-item.active .friend-avatar {
     border-color: var(--whatsappgreen);
+    border-width: 3px;
+    box-shadow: 0 4px 16px rgba(37, 211, 102, 0.3);
 }
 
 .friend-avatar img {
@@ -678,11 +737,12 @@
 }
 
 .friend-name {
-    font-size: 14px;
-    font-weight: 600;
-    margin: 0 0 4px 0;
+    font-size: 15px;
+    font-weight: 700;
+    margin: 0 0 5px 0;
     color: var(--black);
-    transition: color 0.2s;
+    transition: all 0.2s;
+    letter-spacing: -0.2px;
 }
 
 .friend-item:hover .friend-name {
@@ -723,15 +783,17 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-width: 20px;
-    height: 20px;
-    padding: 0 6px;
-    background-color: var(--whatsappgreen);
+    min-width: 24px;
+    height: 24px;
+    padding: 0 8px;
+    background: linear-gradient(135deg, var(--whatsappgreen) 0%, var(--darkgreen) 100%);
     color: white;
-    border-radius: 10px;
+    border-radius: 12px;
     font-size: 11px;
     font-weight: 700;
     line-height: 1;
+    box-shadow: 0 2px 6px rgba(37, 211, 102, 0.3);
+    animation: pulse-badge 2s ease-in-out infinite;
 }
 
 /* Main Chat Area */
@@ -1863,29 +1925,45 @@
 /* Scrollbar Styling */
 .dashboard-sidebar::-webkit-scrollbar,
 .messages-container::-webkit-scrollbar,
-.friend-requests-list::-webkit-scrollbar,
-.notifications-list::-webkit-scrollbar {
-    width: 6px;
+.friend-requests-list::-webkit-scrollbar {
+    width: 8px;
 }
 
 .dashboard-sidebar::-webkit-scrollbar-track,
 .messages-container::-webkit-scrollbar-track,
-.friend-requests-list::-webkit-scrollbar-track,
-.notifications-list::-webkit-scrollbar-track {
-    background: #f1f1f1;
+.friend-requests-list::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.02);
+    border-radius: 4px;
 }
 
 .dashboard-sidebar::-webkit-scrollbar-thumb,
 .messages-container::-webkit-scrollbar-thumb,
-.friend-requests-list::-webkit-scrollbar-thumb,
+.friend-requests-list::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, rgba(37, 211, 102, 0.3) 0%, rgba(18, 140, 126, 0.3) 100%);
+    border-radius: 4px;
+    transition: background 0.3s ease;
+}
+
+.dashboard-sidebar::-webkit-scrollbar-thumb:hover,
+.messages-container::-webkit-scrollbar-thumb:hover,
+.friend-requests-list::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, rgba(37, 211, 102, 0.5) 0%, rgba(18, 140, 126, 0.5) 100%);
+}
+
+/* Notifications scrollbar - stili i vjetër */
+.notifications-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+.notifications-list::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+
 .notifications-list::-webkit-scrollbar-thumb {
     background: #c1c1c1;
     border-radius: 3px;
 }
 
-.dashboard-sidebar::-webkit-scrollbar-thumb:hover,
-.messages-container::-webkit-scrollbar-thumb:hover,
-.friend-requests-list::-webkit-scrollbar-thumb:hover,
 .notifications-list::-webkit-scrollbar-thumb:hover {
     background: #a1a1a1;
 }
