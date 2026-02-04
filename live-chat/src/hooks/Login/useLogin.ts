@@ -2,20 +2,6 @@ import { useState } from 'react';
 import { useUser } from '../../contexts/UserContext';
 import { API_URL } from '../../utils/apiConfig';
 
-interface UserData {
-    id: string;
-    name: string;
-    email: string;
-    country: string;
-    username?: string;
-    displayName?: string;
-    bio?: string;
-    statusMessage?: string;
-    profilePhoto?: string;
-    profileCompleted: boolean;
-    createdAt: string;
-}
-
 export function useLogin() {
     const { login } = useUser();
     const [email, setEmail] = useState('');

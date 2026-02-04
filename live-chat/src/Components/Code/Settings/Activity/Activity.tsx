@@ -20,19 +20,6 @@ export function Activity({ onBack }: ActivityProps) {
         await updateActivityStatus(status);
     };
 
-    const getStatusLabel = (status: ActivityStatus): string => {
-        switch (status) {
-            case 'online':
-                return 'Online';
-            case 'offline':
-                return 'Offline';
-            case 'do_not_disturb':
-                return 'Do Not Disturb';
-            default:
-                return 'Offline';
-        }
-    };
-
     const getStatusIcon = (status: ActivityStatus) => {
         switch (status) {
             case 'online':

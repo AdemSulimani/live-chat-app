@@ -5,7 +5,7 @@ import { API_URL } from '../../utils/apiConfig';
 export function useLastSeen() {
     const { getToken, updateUser, user } = useUser();
     const [lastSeenEnabled, setLastSeenEnabled] = useState<boolean>(true); // Default: true
-    const [loading, setLoading] = useState(false);
+    const [loading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
 

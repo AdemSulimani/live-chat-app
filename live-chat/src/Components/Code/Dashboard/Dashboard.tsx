@@ -77,10 +77,8 @@ export function Dashboard() {
         cancelBlockUser,
         // Message edit and options state
         editingMessageId,
-        setEditingMessageId,
         editMessageContent,
         setEditMessageContent,
-        hoveredMessageId,
         setHoveredMessageId,
         showMessageOptions,
         setShowMessageOptions,
@@ -550,7 +548,6 @@ export function Dashboard() {
                                     ) : (
                                         messages.map(message => {
                                             const isOwnMessage = message.senderId === 'current';
-                                            const isHovered = hoveredMessageId === message.id;
                                             const showOptions = showMessageOptions === message.id;
                                             
                                             return (

@@ -221,7 +221,6 @@ export function useProfile() {
             }
 
             // Nëse ka foto, upload-o së pari
-            let profilePhotoUrl = null;
             if (profileData.profilePhoto) {
                 const photoFormData = new FormData();
                 photoFormData.append('photo', profileData.profilePhoto);
@@ -241,8 +240,7 @@ export function useProfile() {
                     return;
                 }
 
-                const photoData = await photoResponse.json();
-                profilePhotoUrl = photoData.profilePhoto;
+                await photoResponse.json();
             }
 
             // Ruaj profilin (me ose pa foto)
